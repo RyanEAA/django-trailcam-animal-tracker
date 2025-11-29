@@ -1,0 +1,1 @@
+# django-trailcam-animal-tracker
