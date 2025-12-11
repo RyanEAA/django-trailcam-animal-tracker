@@ -1,0 +1,28 @@
+{% extends "wildlife/base.html" %}
+
+{% block title %}Photo {{ photo.id }}{% endblock %}
+
+{% block content %}
+<h1>Photo {{ photo.id }}</h1>
+
+<p><a href="{% url 'wildlife:gallery' %}">&larr; Back to gallery</a></p>
+
+{% if photo.image %}
+  <img src="{{ photo.image.url }}" style="max-width:100%; height:auto; margin-bottom:16px;">
+{% endif %}
+
+<p><strong>Species:</strong> {{ photo.species|default:"Unknown" }}</p>
+<p><strong>Date:</strong> {{ photo.date_taken|default:photo.uploaded_at.date }}</p>
+<p><strong>Environment:</strong> {{ photo.environment|default:"—" }}</p>
+
+{% if photo.latitude and photo.longitude %}
+  <p><strong>Location:</strong> {{ photo.latitude }}, {{ photo.longitude }}</p>
+{% endif %}
+
+{% if user.is_authenticated and user.is_researcher %}
+  <p>
+    <a href="{% url 'wildlife:edit_photo' photo.pk %}">Edit</a> |
+    <a href="{% url 'wildlife:delete_photo' photo.pk %}">Delete</a>
+  </p>
+{% endif %}
+{% endblock %}

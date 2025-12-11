@@ -1,13 +1,17 @@
 from django.contrib import admin
-from .models import Camera, Species, Sighting
+from django.contrib.auth.admin import UserAdmin
+from .models import User, Photo, Species
 
-# Register your models here.
+@admin.register(User)
+class CustomUserAdmin(UserAdmin):
+    fieldsets = UserAdmin.fieldsets + (
+        ("Role", {"fields": ("is_researcher",)}),
+    )
+    list_display = ("username", "email", "is_researcher", "is_staff", "is_superuser")
 
-@admin.register(Sighting)
-class SightingAdmin(admin.ModelAdmin):
-    list_display = ("id", "camera", "timestamp")
-    list_filter = ("camera", "species")
-    search_fields = ("camera__name", "species__name")
+@admin.register(Photo)
+class PhotoAdmin(admin.ModelAdmin):
+    list_display = ("id", "species", "date_taken", "uploaded_by")
+    list_filter = ("species", "date_taken")
 
-admin.site.register(Camera)
 admin.site.register(Species)

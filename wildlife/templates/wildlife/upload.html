@@ -1,0 +1,52 @@
+{% extends "wildlife/base.html" %}
+
+{% block title %}Upload Trailcam Photos{% endblock %}
+
+{% block content %}
+<h1>Upload trailcam photos</h1>
+
+<form id="upload-form" method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  {{ form.non_field_errors }}
+
+  <input id="file-input" type="file" name="images" multiple style="display:none;">
+
+  <div id="dropzone" class="dropzone"
+       style="border:2px dashed #ccc; border-radius:8px; padding:40px; text-align:center; cursor:pointer; max-width:600px;">
+    <p>Drag &amp; drop images here, or click to select files.</p>
+  </div>
+
+  <p style="margin-top:16px;">
+    <button type="submit">Upload</button>
+  </p>
+</form>
+
+<script>
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('file-input');
+
+  dropzone.addEventListener('click', () => fileInput.click());
+
+  ['dragenter', 'dragover'].forEach(evt => {
+    dropzone.addEventListener(evt, e => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.style.borderColor = '#4285f4';
+      dropzone.style.background = '#f1f5ff';
+    });
+  });
+
+  ['dragleave', 'drop'].forEach(evt => {
+    dropzone.addEventListener(evt, e => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.style.borderColor = '#ccc';
+      dropzone.style.background = 'transparent';
+    });
+  });
+
+  dropzone.addEventListener('drop', e => {
+    fileInput.files = e.dataTransfer.files;
+  });
+</script>
+{% endblock %}

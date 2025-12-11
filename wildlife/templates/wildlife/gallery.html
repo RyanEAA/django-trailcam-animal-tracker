@@ -1,0 +1,39 @@
+{% extends "wildlife/base.html" %}
+
+{% block title %}Wildlife Gallery{% endblock %}
+
+{% block content %}
+<h1>Wildlife Gallery</h1>
+
+{# --- Public gallery section --- #}
+<section>
+  <h2>Photos</h2>
+
+  {% if photos %}
+    <div style="display:flex; flex-wrap:wrap; gap:16px;">
+      {% for photo in photos %}
+        <div style="border:1px solid #ddd; padding:8px; border-radius:6px; width:220px;">
+          <a href="{% url 'wildlife:photo_detail' photo.pk %}" style="text-decoration:none; color:inherit;">
+            {% if photo.image %}
+              <img src="{{ photo.image.url }}" style="max-width:100%; height:auto;">
+            {% endif %}
+            <div>
+              <strong>{{ photo.species|default:"Unknown" }}</strong><br>
+              <small>{{ photo.date_taken|default:photo.uploaded_at.date }}</small>
+            </div>
+          </a>
+
+          {% if user.is_authenticated and user.is_researcher %}
+            <div style="margin-top: 6px; font-size: 0.9em;">
+              <a href="{% url 'wildlife:edit_photo' photo.pk %}">Edit</a> |
+              <a href="{% url 'wildlife:delete_photo' photo.pk %}">Delete</a>
+            </div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p>No photos available yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

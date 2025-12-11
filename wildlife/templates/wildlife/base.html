@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{% block title %}Trailcam Wildlife{% endblock %}</title>
+    <style>
+        /* Simple clean navbar */
+        body { margin: 0; font-family: Arial, sans-serif; }
+
+        nav {
+            background: #2c3e50;
+            padding: 12px 20px;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        nav .left a,
+        nav .right a {
+            color: white;
+            margin-right: 15px;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        nav .right form {
+            display: inline;
+        }
+
+        nav .right button {
+            background: #e74c3c;
+            border: none;
+            color: white;
+            padding: 6px 10px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        nav .right button:hover {
+            background: #c0392b;
+        }
+
+        .container {
+            padding: 20px;
+        }
+    </style>
+
+    {% block extra_head %}{% endblock %}
+</head>
+
+<body>
+
+<nav>
+    <div class="left">
+        <a href="{% url 'wildlife:gallery' %}">Gallery</a>
+
+        {% if user.is_authenticated and user.is_researcher %}
+            <a href="{% url 'wildlife:upload_photos' %}">Upload Photos</a>
+        {% endif %}
+    </div>
+
+    <div class="right">
+        {% if user.is_authenticated %}
+            <span>Hello, {{ user.username }}!</span>
+
+            <form action="{% url 'logout' %}" method="post" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit">Sign Out</button>
+            </form>
+        {% else %}
+            <a href="{% url 'login' %}?next={% url 'wildlife:gallery' %}">Sign In</a>
+        {% endif %}
+    </div>
+</nav>
+
+
+<div class="container">
+    {% block content %}
+    {% endblock %}
+</div>
+</body>
+</html>

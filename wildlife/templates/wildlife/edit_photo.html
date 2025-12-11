@@ -1,0 +1,19 @@
+{% extends "wildlife/base.html" %}
+
+{% block title %}Edit Photo {{ photo.id }}{% endblock %}
+
+{% block content %}
+<h1>Edit photo {{ photo.id }}</h1>
+
+<p><a href="{% url 'wildlife:researcher_dashboard' %}">&larr; Back to dashboard</a></p>
+
+{% if photo.image %}
+  <img src="{{ photo.image.url }}" style="max-width:300px; margin-bottom:16px;">
+{% endif %}
+
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Save</button>
+</form>
+{% endblock %}

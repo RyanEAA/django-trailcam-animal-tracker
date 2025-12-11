@@ -1,0 +1,43 @@
+{% extends "wildlife/base.html" %}
+
+{% block title %}Researcher Dashboard{% endblock %}
+
+{% block content %}
+<h1>Researcher dashboard</h1>
+
+<p>
+  <a href="{% url 'wildlife:upload_photos' %}">Upload new photos</a> |
+  <a href="{% url 'wildlife:export_photos_csv' %}">Export CSV</a>
+</p>
+
+{% if photos %}
+  <table border="1" cellpadding="6" cellspacing="0">
+    <tr>
+      <th>Preview</th>
+      <th>Species</th>
+      <th>Date</th>
+      <th>Environment</th>
+      <th>Actions</th>
+    </tr>
+    {% for photo in photos %}
+      <tr>
+        <td>
+          {% if photo.image %}
+            <img src="{{ photo.image.url }}" style="max-width:120px;">
+          {% endif %}
+        </td>
+        <td>{{ photo.species|default:"Unknown" }}</td>
+        <td>{{ photo.date_taken|default:photo.uploaded_at.date }}</td>
+        <td>{{ photo.environment|default:"—" }}</td>
+        <td>
+          <a href="{% url 'wildlife:edit_photo' photo.pk %}">Edit</a> |
+          <a href="{% url 'wildlife:delete_photo' photo.pk %}">Delete</a> |
+          <a href="{% url 'wildlife:photo_detail' photo.pk %}">View</a>
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+{% else %}
+  <p>No photos yet. <a href="{% url 'wildlife:upload_photos' %}">Upload some</a>.</p>
+{% endif %}
+{% endblock %}

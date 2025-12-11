@@ -1,27 +1,32 @@
+from django.contrib.auth.models import AbstractUser
 from django.db import models
 
-# Create your models here.
-class Camera(models.Model):
-    name = models.CharField(max_length=100)
-    latitude = models.FloatField()
-    longitude = models.FloatField()
-    location_description = models.CharField(max_length=255, blank=True)
+class User(AbstractUser):
+    is_researcher = models.BooleanField(default=False)
 
-    def __str__(self):
-        return self.name
-    
 class Species(models.Model):
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=128, unique=True)
 
     def __str__(self):
         return self.name
-    
-class Sighting(models.Model):
-    image = models.ImageField(upload_to='sightings/')
-    timestamp = models.DateTimeField(auto_now_add=True)
-    camera = models.ForeignKey(Camera, on_delete=models.CASCADE)
-    species = models.ForeignKey(Species, on_delete=models.CASCADE)
-    weather = models.CharField(max_length=100, blank=True)
+
+class Photo(models.Model):
+    image = models.ImageField(upload_to='trailcam/')
+    species = models.ForeignKey(Species, null=True, blank=True, on_delete=models.SET_NULL)
+    date_taken = models.DateField(null=True, blank=True)
+    environment = models.CharField(max_length=255, blank=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    uploaded_by = models.ForeignKey(
+        'wildlife.User',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='uploaded_photos',
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    megadetector_result = models.JSONField(null=True, blank=True)
 
     def __str__(self):
-        return f"{self.species.name} sighted at {self.camera.name} on {self.timestamp}"
+        return f"{self.species or 'Unknown'} ({self.pk})"
