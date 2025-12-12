@@ -1,39 +1,87 @@
 {% extends "wildlife/base.html" %}
 
-{% block title %}Wildlife Gallery{% endblock %}
+{% block title %}Gallery{% endblock %}
 
 {% block content %}
-<h1>Wildlife Gallery</h1>
+<h1>Public Gallery</h1>
 
-{# --- Public gallery section --- #}
-<section>
-  <h2>Photos</h2>
+<div style="margin: 10px 0 18px 0;">
+  <button id="toggle-params-btn"
+          style="padding:6px 10px; cursor:pointer;">
+    Hide details
+  </button>
+</div>
 
-  {% if photos %}
-    <div style="display:flex; flex-wrap:wrap; gap:16px;">
-      {% for photo in photos %}
-        <div style="border:1px solid #ddd; padding:8px; border-radius:6px; width:220px;">
-          <a href="{% url 'wildlife:photo_detail' photo.pk %}" style="text-decoration:none; color:inherit;">
-            {% if photo.image %}
-              <img src="{{ photo.image.url }}" style="max-width:100%; height:auto;">
-            {% endif %}
-            <div>
-              <strong>{{ photo.species|default:"Unknown" }}</strong><br>
-              <small>{{ photo.date_taken|default:photo.uploaded_at.date }}</small>
-            </div>
-          </a>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const btn = document.getElementById("toggle-params-btn");
+    const body = document.body;
 
-          {% if user.is_authenticated and user.is_researcher %}
-            <div style="margin-top: 6px; font-size: 0.9em;">
-              <a href="{% url 'wildlife:edit_photo' photo.pk %}">Edit</a> |
-              <a href="{% url 'wildlife:delete_photo' photo.pk %}">Delete</a>
-            </div>
-          {% endif %}
+    const hideParams = localStorage.getItem("hidePhotoParams") === "true";
+    if (hideParams) {
+      body.classList.add("hide-params");
+      btn.textContent = "Show details";
+    }
+
+    btn.addEventListener("click", () => {
+      body.classList.toggle("hide-params");
+      const isHidden = body.classList.contains("hide-params");
+      btn.textContent = isHidden ? "Show details" : "Hide details";
+      localStorage.setItem("hidePhotoParams", isHidden);
+    });
+  });
+</script>
+
+{% if photos %}
+  <div style="display:flex; flex-wrap:wrap; gap:16px;">
+    {% for photo in photos %}
+      <div class="photo-card">
+        <div class="photo-title">
+          {{ photo.image.name|default:"Photo" }}
         </div>
-      {% endfor %}
-    </div>
-  {% else %}
-    <p>No photos available yet.</p>
-  {% endif %}
-</section>
+
+        {% if photo.image %}
+          <img src="{{ photo.image.url }}" class="photo-preview">
+        {% endif %}
+
+        <div class="photo-params">
+          <strong>Model parameters:</strong>
+          <ul>
+            <li>Species: {{ photo.species.name|default:"Unknown" }}</li>
+            <li>Date/time:
+              {% if photo.date_taken %}
+                {{ photo.date_taken }}
+              {% else %}
+                {{ photo.uploaded_at }}
+              {% endif %}
+            </li>
+            <li>Camera ID:
+              {% if photo.camera %}
+                {{ photo.camera.name }}
+              {% else %}
+                Unknown
+              {% endif %}
+            </li>
+            <li>Temperature:
+              {% if photo.temperature %}
+                {{ photo.temperature }}&deg;
+              {% else %}
+                —
+              {% endif %}
+            </li>
+            <li>Pressure:
+              {% if photo.pressure %}
+                {{ photo.pressure }} inHg
+              {% else %}
+                —
+              {% endif %}
+            </li>
+          </ul>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <p>No photos yet.</p>
+{% endif %}
 {% endblock %}

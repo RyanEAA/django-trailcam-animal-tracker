@@ -1,52 +1,138 @@
 {% extends "wildlife/base.html" %}
 
-{% block title %}Upload Trailcam Photos{% endblock %}
+{% block title %}Upload Photos{% endblock %}
 
 {% block content %}
-<h1>Upload trailcam photos</h1>
+<h1>Upload Trailcam Photos</h1>
+
+<p><a href="{% url 'wildlife:gallery' %}">&larr; Back to Gallery</a></p>
+
+{% if error %}
+  <div style="background:#ffecec; border:1px solid #f5aca6; padding:8px; margin-bottom:10px; border-radius:4px;">
+    {{ error }}
+  </div>
+{% endif %}
 
 <form id="upload-form" method="post" enctype="multipart/form-data">
-  {% csrf_token %}
-  {{ form.non_field_errors }}
+    {% csrf_token %}
 
-  <input id="file-input" type="file" name="images" multiple style="display:none;">
+    <!-- Hidden file input (name MUST be "images") -->
+    <input id="file-input" type="file" name="images" multiple style="display:none;">
 
-  <div id="dropzone" class="dropzone"
-       style="border:2px dashed #ccc; border-radius:8px; padding:40px; text-align:center; cursor:pointer; max-width:600px;">
-    <p>Drag &amp; drop images here, or click to select files.</p>
-  </div>
+    <!-- Dropzone -->
+    <div id="dropzone"
+         style="border: 2px dashed #ccc; border-radius: 8px; padding: 40px;
+                text-align: center; cursor:pointer; max-width:600px;">
+        <p>Drag &amp; drop images here, or click to select files.</p>
+    </div>
 
-  <p style="margin-top:16px;">
-    <button type="submit">Upload</button>
-  </p>
+    <!-- Selected files cards -->
+    <div id="file-info" style="margin-top:16px; display:none;">
+        <strong>Selected files:</strong>
+        <div id="file-previews"
+             style="margin-top:8px; display:flex; flex-wrap:wrap; gap:12px;"></div>
+    </div>
+
+    <p style="margin-top:16px;">
+        <button type="submit">Upload Photos</button>
+    </p>
 </form>
 
 <script>
-  const dropzone = document.getElementById('dropzone');
-  const fileInput = document.getElementById('file-input');
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('file-input');
+    const fileInfo = document.getElementById('file-info');
+    const filePreviews = document.getElementById('file-previews');
 
-  dropzone.addEventListener('click', () => fileInput.click());
+    function createPreviewCardForFile(file) {
+        const card = document.createElement('div');
+        card.className = 'photo-card';
 
-  ['dragenter', 'dragover'].forEach(evt => {
-    dropzone.addEventListener(evt, e => {
-      e.preventDefault();
-      e.stopPropagation();
-      dropzone.style.borderColor = '#4285f4';
-      dropzone.style.background = '#f1f5ff';
+        const title = document.createElement('div');
+        title.className = 'photo-title';
+        title.textContent = file.name;
+
+        const img = document.createElement('img');
+        img.className = 'photo-preview';
+        img.alt = file.name;
+
+        if (file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        } else {
+            img.style.display = 'none';
+        }
+
+        const params = document.createElement('div');
+        params.className = 'photo-params';
+        params.innerHTML = `
+            <strong>Model parameters:</strong>
+            <ul>
+                <li>Species: to be inferred</li>
+                <li>Date/time: to be inferred</li>
+                <li>Camera ID: to be inferred</li>
+                <li>Temperature: to be inferred</li>
+                <li>Pressure: to be inferred</li>
+            </ul>
+        `;
+
+        card.appendChild(title);
+        card.appendChild(img);
+        card.appendChild(params);
+        return card;
+    }
+
+    function updateFileInfo(files) {
+        if (!files || files.length === 0) {
+            fileInfo.style.display = 'none';
+            filePreviews.innerHTML = '';
+            return;
+        }
+
+        fileInfo.style.display = 'block';
+        filePreviews.innerHTML = '';
+
+        Array.from(files).forEach(file => {
+            const card = createPreviewCardForFile(file);
+            filePreviews.appendChild(card);
+        });
+    }
+
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    ['dragenter', 'dragover'].forEach(evt => {
+      dropzone.addEventListener(evt, e => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.style.borderColor = '#4285f4';
+        dropzone.style.background = '#f1f5ff';
+      });
     });
-  });
 
-  ['dragleave', 'drop'].forEach(evt => {
-    dropzone.addEventListener(evt, e => {
-      e.preventDefault();
-      e.stopPropagation();
-      dropzone.style.borderColor = '#ccc';
-      dropzone.style.background = 'transparent';
+    ['dragleave', 'drop'].forEach(evt => {
+      dropzone.addEventListener(evt, e => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.style.borderColor = '#ccc';
+        dropzone.style.background = 'transparent';
+      });
     });
-  });
 
-  dropzone.addEventListener('drop', e => {
-    fileInput.files = e.dataTransfer.files;
-  });
+    // Use DataTransfer to set fileInput.files so Django sees them
+    dropzone.addEventListener('drop', e => {
+      const dt = new DataTransfer();
+      for (const file of e.dataTransfer.files) {
+        dt.items.add(file);
+      }
+      fileInput.files = dt.files;
+      updateFileInfo(fileInput.files);
+    });
+
+    fileInput.addEventListener('change', () => {
+      updateFileInfo(fileInput.files);
+    });
 </script>
 {% endblock %}

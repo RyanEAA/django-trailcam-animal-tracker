@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, Photo, Species
+from .models import User, Photo, Species, Camera
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
@@ -14,4 +14,7 @@ class PhotoAdmin(admin.ModelAdmin):
     list_display = ("id", "species", "date_taken", "uploaded_by")
     list_filter = ("species", "date_taken")
 
-admin.site.register(Species)
+# admin.site.register(User)
+# admin.site.register(Species)
+# admin.site.register(Camera)
+# admin.site.register(Photo)

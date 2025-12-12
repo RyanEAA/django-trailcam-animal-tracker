@@ -9,8 +9,11 @@ import csv
 from .forms import PhotoUploadForm, PhotoEditForm
 from .models import Photo, Species
 from .utils import require_researcher
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseForbidden
 
+from django.db.models import Q
+from django.shortcuts import render
+from .models import Photo, Species, Camera
 
 
 # Create your views here.
@@ -21,46 +24,73 @@ def index(request):
 
 
 def gallery(request):
-    """
-    Public gallery (GET):
-      - Anyone can view photos.
-      - Filters can be added later.
+    qs = Photo.objects.all().order_by("-uploaded_at")
 
-    Researcher upload (POST):
-      - If a logged-in researcher submits the form,
-        handle multi-file upload and then reload the gallery.
-    """
-    # Handle upload if it's a POST from a researcher
-    if request.method == "POST":
-        if not request.user.is_authenticated or not getattr(request.user, "is_researcher", False):
-            return HttpResponseForbidden("Only researchers can upload photos.")
+    # ---- read filters from querystring ----
+    species_ids = request.GET.getlist("species")  # multi-select
+    camera_id = request.GET.get("camera", "").strip()
 
-        form = PhotoUploadForm(request.POST, request.FILES)
-        if form.is_valid():
-            files = request.FILES.getlist("images")
-            for f in files:
-                Photo.objects.create(
-                    image=f,
-                    uploaded_by=request.user,
-                    uploaded_at=timezone.now(),
-                )
-            # After upload, redirect to GET to avoid resubmitting on refresh
-            return redirect("wildlife:gallery")
-    else:
-        form = PhotoUploadForm() if request.user.is_authenticated and getattr(request.user, "is_researcher", False) else None
+    start_date = request.GET.get("start_date", "").strip()
+    end_date = request.GET.get("end_date", "").strip()
 
-    photos = Photo.objects.all().select_related("species").order_by("-uploaded_at")
-    species_list = Species.objects.all().order_by("name")
+    temp_min = request.GET.get("temp_min", "").strip()
+    temp_max = request.GET.get("temp_max", "").strip()
 
-    return render(
-        request,
-        "wildlife/gallery.html",
-        {
-            "photos": photos,
-            "species_list": species_list,
-            "upload_form": form,
-        },
-    )
+    pressure_min = request.GET.get("pressure_min", "").strip()
+    pressure_max = request.GET.get("pressure_max", "").strip()
+
+    # ---- apply filters ----
+    if species_ids:
+        qs = qs.filter(species_id__in=species_ids)
+
+    # If you have a camera FK on Photo:
+    if camera_id:
+        qs = qs.filter(camera_id=camera_id)
+
+    # Date range (assuming you have date_taken; fallback to uploaded_at date if not)
+    # Prefer date_taken if you have it:
+    if start_date:
+        qs = qs.filter(date_taken__gte=start_date) if hasattr(Photo, "date_taken") else qs.filter(uploaded_at__date__gte=start_date)
+    if end_date:
+        qs = qs.filter(date_taken__lte=end_date) if hasattr(Photo, "date_taken") else qs.filter(uploaded_at__date__lte=end_date)
+
+    # Temperature range (only if Photo has temperature)
+    if temp_min:
+        qs = qs.filter(temperature__gte=temp_min)
+    if temp_max:
+        qs = qs.filter(temperature__lte=temp_max)
+
+    # Pressure range (only if Photo has pressure)
+    if pressure_min:
+        qs = qs.filter(pressure__gte=pressure_min)
+    if pressure_max:
+        qs = qs.filter(pressure__lte=pressure_max)
+
+    # ---- options for the filter UI ----
+    species_options = Species.objects.all().order_by("name")
+    camera_options = []
+    try:
+        camera_options = Camera.objects.all().order_by("name")
+    except Exception:
+        # If you don't have Camera model yet, ignore
+        camera_options = []
+
+    context = {
+        "photos": qs,
+        "species_options": species_options,
+        "camera_options": camera_options,
+
+        # echo current selections back to template
+        "selected_species_ids": list(map(str, species_ids)),
+        "selected_camera_id": camera_id,
+        "start_date": start_date,
+        "end_date": end_date,
+        "temp_min": temp_min,
+        "temp_max": temp_max,
+        "pressure_min": pressure_min,
+        "pressure_max": pressure_max,
+    }
+    return render(request, "wildlife/gallery.html", context)
 
 
 def photo_detail(request, pk):
@@ -77,13 +107,21 @@ def researcher_dashboard(request):
 
 @login_required
 def upload_photos(request):
-    if not request.user.is_researcher:
-        return HttpResponseForbidden("Only researchers can upload.")
+    # Only allow researchers to upload
+    if not getattr(request.user, "is_researcher", False):
+        return HttpResponseForbidden("Only researchers can upload photos.")
+
+    error = None
 
     if request.method == "POST":
-        form = PhotoUploadForm(request.POST, request.FILES)
-        if form.is_valid():
-            files = request.FILES.getlist("images")
+        files = request.FILES.getlist("images")  # MUST match input name="images"
+
+        print("DEBUG: POST received. FILES keys:", list(request.FILES.keys()))
+        print("DEBUG: Number of files in 'images':", len(files))
+
+        if not files:
+            error = "No files received. Please drag and drop or choose images before uploading."
+        else:
             for f in files:
                 Photo.objects.create(
                     image=f,
@@ -91,14 +129,8 @@ def upload_photos(request):
                     uploaded_at=timezone.now(),
                 )
             return redirect("wildlife:gallery")
-    else:
-        form = PhotoUploadForm()
 
-    return render(
-        request,
-        "wildlife/upload.html",
-        {"form": form},
-    )
+    return render(request, "wildlife/upload.html", {"error": error})
 
 
 @login_required
