@@ -1,5 +1,5 @@
 from django import forms
-from .models import Photo
+from .models import Photo, PhotoDetection
 
 class MultiFileInput(forms.ClearableFileInput):
     allow_multiple_selected = True  # needed for Django 5
@@ -16,4 +16,10 @@ class PhotoUploadForm(forms.Form):
 class PhotoEditForm(forms.ModelForm):
     class Meta:
         model = Photo
-        fields = ["species", "date_taken", "environment", "latitude", "longitude"]
+        fields = ["date_taken", "environment", "latitude", "longitude", "pressure", "camera"]
+
+
+class PhotoDetectionForm(forms.ModelForm):
+    class Meta:
+        model = PhotoDetection
+        fields = ["species", "count", "confidence", "source"]

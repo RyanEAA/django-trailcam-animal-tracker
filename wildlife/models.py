@@ -33,7 +33,6 @@ class Photo(models.Model):
     # NEW: Camera FK
     camera = models.ForeignKey(Camera, null=True, blank=True, on_delete=models.SET_NULL)
 
-    species = models.ForeignKey(Species, null=True, blank=True, on_delete=models.SET_NULL)
     date_taken = models.DateField(null=True, blank=True)
     environment = models.CharField(max_length=255, blank=True)
 
@@ -62,4 +61,30 @@ class Photo(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.species or 'Unknown'} ({self.pk})"
+        # show up to 2 species names from detections
+        names = list(
+            self.detections.select_related("species")
+            .values_list("species__name", flat=True)
+        )
+        names = [n for n in names if n]
+        label = ", ".join(names[:2]) if names else "Unknown"
+        if len(names) > 2:
+            label += "…"
+        return f"{label} ({self.pk})"
+
+class PhotoDetection(models.Model):
+    photo = models.ForeignKey(Photo, related_name="detections", on_delete=models.CASCADE)
+    species = models.ForeignKey(Species, null=True, blank=True, on_delete=models.SET_NULL)
+
+    # useful for AI + later editing
+    confidence = models.DecimalField(max_digits=5, decimal_places=4, null=True, blank=True)  # 0-1
+    count = models.PositiveIntegerField(default=1)
+
+    # optional bounding box (normalized 0..1)
+    x = models.DecimalField(max_digits=7, decimal_places=6, null=True, blank=True)
+    y = models.DecimalField(max_digits=7, decimal_places=6, null=True, blank=True)
+    w = models.DecimalField(max_digits=7, decimal_places=6, null=True, blank=True)
+    h = models.DecimalField(max_digits=7, decimal_places=6, null=True, blank=True)
+
+    source = models.CharField(max_length=32, default="ai")  # ai | human
+    created_at = models.DateTimeField(auto_now_add=True)
