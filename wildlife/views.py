@@ -142,12 +142,10 @@ def analyze_photo(request, pk):
     try:
         img = Image.open(photo.image.path)
         # strip = crop_bottom_strip(img, pct=0.05).convert("L")
-        strip = crop_bottom_strip(img, pct=0.045).convert("L")
+        strip = crop_bottom_strip(img, pct=0.042).convert("L")
 
         text = pytesseract.image_to_string(strip)
         print("OCR TEXT >>>", repr(text))
-
-        strip = crop_bottom_strip(img, pct=0.05).convert("L")
 
         # upscale to help OCR
         scale = 3
