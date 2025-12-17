@@ -1,0 +1,123 @@
+/* Card grid (matches gallery) */
+.photo-card{
+  width: 260px;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  padding: 12px;
+  background: #fff;
+}
+
+.photo-title{
+  font-weight: 700;
+  margin-bottom: 8px;
+  word-break: break-word;
+  font-size: 14px;
+}
+
+.photo-card img{
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+  display: block;
+}
+
+.photo-params{
+  margin-top: 10px;
+  font-size: 13px;
+  color: #222;
+}
+
+.hide-params .photo-params{
+  display:none;
+}
+
+/* Buttons inside cards */
+.card-actions{
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn{
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  background: #f7f7f7;
+  cursor: pointer;
+}
+
+.btn-primary{
+  border-color: #2c6bed;
+  background: #2c6bed;
+  color: #fff;
+}
+
+.btn:disabled{
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+/* Modal that shows whole card */
+.card-modal-backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.38);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 9999;
+}
+
+.card-modal-backdrop.is-open{
+  display: flex;
+}
+
+.card-modal{
+  max-width: min(92vw, 980px);
+  max-height: 88vh;
+  overflow: auto;
+  border-radius: 16px;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.45);
+  background: #fff;
+  padding: 16px;
+}
+
+/* Make modal card bigger than thumbnails */
+.card-modal .photo-card{
+  width: 100%;
+  max-width: 860px;
+  border: none;
+  padding: 0;
+}
+
+.card-modal .photo-title{
+  font-size: 16px;
+}
+
+.card-modal img{
+  border-radius: 14px;
+}
+
+/* Clickable card feel */
+.photo-card.is-clickable{
+  cursor: pointer;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.photo-card.is-clickable:hover{
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.12);
+}
+
+/* A "close" button */
+.modal-close{
+  position: sticky;
+  top: 0;
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}

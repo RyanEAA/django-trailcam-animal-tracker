@@ -7,116 +7,59 @@
 
 <p><a href="{% url 'wildlife:gallery' %}">&larr; Back to Gallery</a></p>
 
+<div style="margin: 10px 0 18px 0;">
+  <button id="toggle-params-btn" class="btn" type="button">
+    Hide details
+  </button>
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const btn = document.getElementById("toggle-params-btn");
+    const body = document.body;
+
+    const hideParams = localStorage.getItem("hidePhotoParams") === "true";
+    if (hideParams) {
+      body.classList.add("hide-params");
+      btn.textContent = "Show details";
+    }
+
+    btn.addEventListener("click", () => {
+      body.classList.toggle("hide-params");
+      const isHidden = body.classList.contains("hide-params");
+      btn.textContent = isHidden ? "Show details" : "Hide details";
+      localStorage.setItem("hidePhotoParams", isHidden);
+    });
+  });
+</script>
+
 {% if error %}
-  <div style="background:#ffecec; border:1px solid #f5aca6; padding:8px; margin-bottom:10px; border-radius:4px;">
+  <div style="background:#ffecec; border:1px solid #f5aca6; padding:8px; margin-bottom:10px; border-radius:6px;">
     {{ error }}
   </div>
 {% endif %}
 
-<form id="upload-form" method="post" enctype="multipart/form-data">
+<form id="upload-form" method="post" enctype="multipart/form-data" style="margin-bottom:18px;">
   {% csrf_token %}
 
-  <!-- Hidden file input (name MUST be "images") -->
   <input id="file-input" type="file" name="images" multiple accept="image/*" style="display:none;">
 
-  <!-- Dropzone -->
   <div id="dropzone"
-       style="border: 2px dashed #ccc; border-radius: 8px; padding: 40px;
-              text-align: center; cursor:pointer; max-width:600px;">
+       style="border: 2px dashed #ccc; border-radius: 10px; padding: 34px;
+              text-align: center; cursor:pointer; max-width:760px;">
     <p style="margin:0;">Drag &amp; drop images here, or click to select files.</p>
   </div>
 
-  <!-- Selected files cards -->
   <div id="file-info" style="margin-top:16px; display:none;">
     <strong>Selected files:</strong>
     <div id="file-previews"
-         style="margin-top:8px; display:flex; flex-wrap:wrap; gap:12px;"></div>
+         style="margin-top:10px; display:flex; flex-wrap:wrap; gap:12px;"></div>
   </div>
 
   <p style="margin-top:16px;">
-    <button id="upload-btn" type="submit" disabled>Upload Photos</button>
+    <button id="upload-btn" class="btn btn-primary" type="submit" disabled>Upload Photos</button>
   </p>
 </form>
-
-<hr style="margin: 28px 0;">
-
-<h2>Your uploaded photos</h2>
-<p style="color:#666;">
-  Click <strong>Analyze</strong> to extract metadata. Then <strong>Publish</strong> to show in the gallery.
-</p>
-
-<table style="width:100%; border-collapse:collapse; margin-top:12px;">
-  <thead>
-    <tr>
-      <th style="text-align:left;">Preview</th>
-      <th>Camera</th>
-      <th>Date</th>
-      <th>Time</th>
-      <th>Temp</th>
-      <th>Pressure</th>
-      <th>Status</th>
-      <th>Actions</th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for photo in recent_photos %}
-    <tr style="border-top:1px solid #ddd;">
-      <td style="padding:8px;">
-        <img src="{{ photo.image.url }}" style="max-width:120px;">
-      </td>
-      <td>{{ photo.camera.name|default:"—" }}</td>
-      <td>{{ photo.date_taken|default:"—" }}</td>
-      <td>{{ photo.time_taken|default:"—" }}</td>
-      <td>
-        {% if photo.temperature is not None %}
-          {{ photo.temperature }}°C
-        {% else %}
-          —
-        {% endif %}
-      </td>
-      <td>
-        {% if photo.pressure is not None %}
-          {{ photo.pressure }} inHg
-        {% else %}
-          —
-        {% endif %}
-      </td>
-      <td>
-        {% if photo.is_published %}
-          Published
-        {% elif photo.date_taken %}
-          Analyzed
-        {% else %}
-          Uploaded
-        {% endif %}
-      </td>
-      <td>
-        <!-- ANALYZE -->
-        <form method="post"
-              action="{% url 'wildlife:analyze_photo' photo.id %}"
-              style="display:inline;">
-          {% csrf_token %}
-          <button type="submit">Analyze</button>
-        </form>
-
-        <!-- PUBLISH -->
-        {% if photo.date_taken and photo.time_taken and photo.temperature is not None and photo.pressure is not None and not photo.is_published %}
-          <form method="post"
-                action="{% url 'wildlife:publish_photo' photo.id %}"
-                style="display:inline;">
-            {% csrf_token %}
-            <button type="submit">Publish</button>
-          </form>
-        {% endif %}
-      </td>
-    </tr>
-  {% empty %}
-    <tr>
-      <td colspan="8">No uploads yet.</td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
 
 <script>
   const dropzone = document.getElementById('dropzone');
@@ -127,23 +70,14 @@
 
   function createPreviewCardForFile(file) {
     const card = document.createElement('div');
-    card.style.border = '1px solid #ddd';
-    card.style.borderRadius = '8px';
-    card.style.padding = '10px';
-    card.style.width = '240px';
+    card.className = 'photo-card';
 
     const title = document.createElement('div');
+    title.className = 'photo-title';
     title.textContent = file.name;
-    title.style.fontWeight = '600';
-    title.style.marginBottom = '8px';
-    title.style.wordBreak = 'break-word';
 
     const img = document.createElement('img');
     img.alt = file.name;
-    img.style.width = '100%';
-    img.style.height = 'auto';
-    img.style.borderRadius = '6px';
-    img.style.display = 'block';
 
     if (file.type.startsWith('image/')) {
       const reader = new FileReader();
@@ -153,8 +87,22 @@
       img.style.display = 'none';
     }
 
+    const params = document.createElement('div');
+    params.className = 'photo-params';
+    params.innerHTML = `
+      <strong>Model parameters:</strong>
+      <ul>
+        <li>Species: to be inferred</li>
+        <li>Date/time: to be inferred</li>
+        <li>Camera ID: to be inferred</li>
+        <li>Temperature: to be inferred</li>
+        <li>Pressure: to be inferred</li>
+      </ul>
+    `;
+
     card.appendChild(title);
     card.appendChild(img);
+    card.appendChild(params);
     return card;
   }
 
@@ -179,7 +127,7 @@
     dropzone.addEventListener(evt, e => {
       e.preventDefault();
       e.stopPropagation();
-      dropzone.style.borderColor = '#4285f4';
+      dropzone.style.borderColor = '#2c6bed';
       dropzone.style.background = '#f1f5ff';
     });
   });
@@ -202,4 +150,82 @@
 
   fileInput.addEventListener('change', updateFileInfo);
 </script>
+
+<hr style="margin: 26px 0;">
+
+<h2>Your uploaded photos</h2>
+<p style="color:#666; margin-top:6px;">
+  Click a card to open it. Analyze first, then publish.
+</p>
+
+{% if recent_photos %}
+  <div style="display:flex; flex-wrap:wrap; gap:16px; margin-top:16px;">
+    {% for photo in recent_photos %}
+      <div class="photo-card is-clickable">
+        <div class="photo-title">
+          {{ photo.image.name|default:"Photo" }}
+        </div>
+
+        {% if photo.image %}
+          <img src="{{ photo.image.url }}" alt="photo {{ photo.id }}">
+        {% endif %}
+
+        <div class="photo-params">
+          <strong>Model parameters:</strong>
+          <ul>
+            <li>Species: (not implemented)</li>
+            <li>Date/time:
+              {% if photo.date_taken %}
+                {{ photo.date_taken }}{% if photo.time_taken %} {{ photo.time_taken }}{% endif %}
+              {% else %}
+                —
+              {% endif %}
+            </li>
+            <li>Camera ID:
+              {% if photo.camera %}
+                {{ photo.camera.name }}
+              {% else %}
+                —
+              {% endif %}
+            </li>
+            <li>Temperature:
+              {% if photo.temperature is not None %}
+                {{ photo.temperature }}&deg;C
+              {% else %}
+                —
+              {% endif %}
+            </li>
+            <li>Pressure:
+              {% if photo.pressure is not None %}
+                {{ photo.pressure }} inHg
+              {% else %}
+                —
+              {% endif %}
+            </li>
+            <li>Status:
+              {% if photo.is_published %}Published{% elif photo.date_taken %}Analyzed{% else %}Uploaded{% endif %}
+            </li>
+          </ul>
+        </div>
+
+        <div class="card-actions">
+          <form method="post" action="{% url 'wildlife:analyze_photo' photo.id %}">
+            {% csrf_token %}
+            <button class="btn" type="submit">Analyze</button>
+          </form>
+
+          {% if photo.date_taken and photo.time_taken and photo.temperature is not None and photo.pressure is not None and not photo.is_published %}
+            <form method="post" action="{% url 'wildlife:publish_photo' photo.id %}">
+              {% csrf_token %}
+              <button class="btn btn-primary" type="submit">Publish</button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <p>No uploads yet.</p>
+{% endif %}
+
 {% endblock %}

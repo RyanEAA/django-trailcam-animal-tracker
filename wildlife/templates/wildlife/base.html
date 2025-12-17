@@ -77,40 +77,104 @@
             display: none;
         }
     </style>
+    <!-- load static -->
+    {% load static %}
+    <link rel="stylesheet" type="text/css" href="{% static 'wildlife/styles.css' %}">
 
     {% block extra_head %}{% endblock %}
 </head>
 
 <body>
 
-<nav>
-    <div class="left">
-        <a href="{% url 'wildlife:gallery' %}">Gallery</a>
+    <nav>
+        <div class="left">
+            <a href="{% url 'wildlife:gallery' %}">Gallery</a>
 
-        {% if user.is_authenticated and user.is_researcher %}
-            <a href="{% url 'wildlife:upload_photos' %}" style="margin-left:12px;">
-                Upload Photos
-            </a>
-        {% endif %}
+            {% if user.is_authenticated and user.is_researcher %}
+                <a href="{% url 'wildlife:upload_photos' %}" style="margin-left:12px;">
+                    Upload Photos
+                </a>
+            {% endif %}
+        </div>
+
+        <div class="right">
+            {% if user.is_authenticated %}
+                <span>Hello, {{ user.username }}!</span>
+                <form action="{% url 'logout' %}" method="post" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit">Sign Out</button>
+                </form>
+            {% else %}
+                <a href="{% url 'login' %}?next={% url 'wildlife:gallery' %}">Sign In</a>
+            {% endif %}
+        </div>
+    </nav>
+
+
+    <div class="container">
+        {% block content %}
+        {% endblock %}
+    </div>
+    <div id="cardModalBackdrop" class="card-modal-backdrop" aria-hidden="true">
+    <div class="card-modal" role="dialog" aria-modal="true">
+        <div class="modal-close">
+        <button id="cardModalCloseBtn" class="btn" type="button">Close</button>
+        </div>
+        <div id="cardModalContent"></div>
+    </div>
     </div>
 
-    <div class="right">
-        {% if user.is_authenticated %}
-            <span>Hello, {{ user.username }}!</span>
-            <form action="{% url 'logout' %}" method="post" style="display:inline;">
-                {% csrf_token %}
-                <button type="submit">Sign Out</button>
-            </form>
-        {% else %}
-            <a href="{% url 'login' %}?next={% url 'wildlife:gallery' %}">Sign In</a>
-        {% endif %}
-    </div>
-</nav>
+    <script>
+    (function () {
+        const backdrop = document.getElementById("cardModalBackdrop");
+        const content = document.getElementById("cardModalContent");
+        const closeBtn = document.getElementById("cardModalCloseBtn");
 
+        function openCardModal(cardEl) {
+        // clone the card so forms/buttons still work (they submit normally)
+        const clone = cardEl.cloneNode(true);
 
-<div class="container">
-    {% block content %}
-    {% endblock %}
-</div>
-</body>
+        // IMPORTANT: inside the modal, we do NOT want click-to-open again
+        clone.classList.remove("is-clickable");
+
+        content.innerHTML = "";
+        content.appendChild(clone);
+
+        backdrop.classList.add("is-open");
+        backdrop.setAttribute("aria-hidden", "false");
+        document.body.style.overflow = "hidden";
+        }
+
+        function closeCardModal() {
+        backdrop.classList.remove("is-open");
+        backdrop.setAttribute("aria-hidden", "true");
+        content.innerHTML = "";
+        document.body.style.overflow = "";
+        }
+
+        // Open modal when clicking a card (but NOT when clicking buttons/forms/links)
+        document.addEventListener("click", (e) => {
+        const card = e.target.closest(".photo-card.is-clickable");
+        if (!card) return;
+
+        // If they clicked something interactive inside the card, don't open modal
+        if (e.target.closest("button, a, form, input, select, textarea, label")) return;
+
+        openCardModal(card);
+        });
+
+        // Close when clicking backdrop (outside modal)
+        backdrop.addEventListener("click", (e) => {
+        if (e.target === backdrop) closeCardModal();
+        });
+
+        closeBtn.addEventListener("click", closeCardModal);
+
+        document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeCardModal();
+        });
+    })();
+    </script>
+
+    </body>
 </html>
