@@ -35,7 +35,7 @@
 {% if photos %}
   <div style="display:flex; flex-wrap:wrap; gap:16px;">
     {% for photo in photos %}
-      <div class="photo-card">
+      <div class="photo-card is-clickable">
         <div class="photo-title">
           {{ photo.image.name|default:"Photo" }}
         </div>
