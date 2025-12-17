@@ -1,1 +1,7 @@
-.env
+/.env
+
+# Ignore everything inside the media folder
+/media/*
+
+# But keep the folder itself when a .gitkeep file is present
+!/media/.gitkeep
