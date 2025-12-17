@@ -1,5 +1,8 @@
 asgiref==3.11.0
 Django==5.2.8
 django-environ==0.12.0
+packaging==25.0
 pillow==12.0.0
+pytesseract==0.3.13
 sqlparse==0.5.4
+tesseract==0.1.3

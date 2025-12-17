@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
+from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
@@ -8,14 +8,18 @@ import csv
 
 from .forms import PhotoUploadForm, PhotoEditForm
 from .models import Photo, Species
-from .utils import require_researcher
+from .utils.utils import require_researcher
 from django.http import HttpResponse, HttpResponseForbidden
 
 from django.db.models import Q
 from django.shortcuts import render
 from .models import Photo, Species, Camera
 
-
+from wildlife.utils.ocr import crop_bottom_strip, extract_overlay_meta
+import pytesseract
+from PIL import Image
+import os
+from django.conf import settings
 # Create your views here.
 
 # Home landing page
@@ -24,7 +28,8 @@ def index(request):
 
 
 def gallery(request):
-    qs = Photo.objects.all().order_by("-uploaded_at")
+    # Start with published photos only (public gallery)
+    qs = Photo.objects.filter(is_published=True).order_by("-uploaded_at")
 
     # ---- read filters from querystring ----
     species_ids = request.GET.getlist("species")  # multi-select
@@ -40,27 +45,24 @@ def gallery(request):
     pressure_max = request.GET.get("pressure_max", "").strip()
 
     # ---- apply filters ----
-    if species_ids:
-        qs = qs.filter(species_id__in=species_ids)
 
-    # If you have a camera FK on Photo:
+    # Species filter must go through PhotoDetection (related_name="detections")
+    if species_ids:
+        qs = qs.filter(detections__species_id__in=species_ids).distinct()
+
     if camera_id:
         qs = qs.filter(camera_id=camera_id)
 
-    # Date range (assuming you have date_taken; fallback to uploaded_at date if not)
-    # Prefer date_taken if you have it:
     if start_date:
-        qs = qs.filter(date_taken__gte=start_date) if hasattr(Photo, "date_taken") else qs.filter(uploaded_at__date__gte=start_date)
+        qs = qs.filter(date_taken__gte=start_date)
     if end_date:
-        qs = qs.filter(date_taken__lte=end_date) if hasattr(Photo, "date_taken") else qs.filter(uploaded_at__date__lte=end_date)
+        qs = qs.filter(date_taken__lte=end_date)
 
-    # Temperature range (only if Photo has temperature)
     if temp_min:
         qs = qs.filter(temperature__gte=temp_min)
     if temp_max:
         qs = qs.filter(temperature__lte=temp_max)
 
-    # Pressure range (only if Photo has pressure)
     if pressure_min:
         qs = qs.filter(pressure__gte=pressure_min)
     if pressure_max:
@@ -68,19 +70,12 @@ def gallery(request):
 
     # ---- options for the filter UI ----
     species_options = Species.objects.all().order_by("name")
-    camera_options = []
-    try:
-        camera_options = Camera.objects.all().order_by("name")
-    except Exception:
-        # If you don't have Camera model yet, ignore
-        camera_options = []
+    camera_options = Camera.objects.all().order_by("name")
 
     context = {
         "photos": qs,
         "species_options": species_options,
         "camera_options": camera_options,
-
-        # echo current selections back to template
         "selected_species_ids": list(map(str, species_ids)),
         "selected_camera_id": camera_id,
         "start_date": start_date,
@@ -91,6 +86,7 @@ def gallery(request):
         "pressure_max": pressure_max,
     }
     return render(request, "wildlife/gallery.html", context)
+
 
 
 def photo_detail(request, pk):
@@ -107,31 +103,135 @@ def researcher_dashboard(request):
 
 @login_required
 def upload_photos(request):
-    # Only allow researchers to upload
     if not getattr(request.user, "is_researcher", False):
         return HttpResponseForbidden("Only researchers can upload photos.")
 
     error = None
 
     if request.method == "POST":
-        files = request.FILES.getlist("images")  # MUST match input name="images"
-
-        print("DEBUG: POST received. FILES keys:", list(request.FILES.keys()))
-        print("DEBUG: Number of files in 'images':", len(files))
-
+        files = request.FILES.getlist("images")
         if not files:
-            error = "No files received. Please drag and drop or choose images before uploading."
+            error = "No files received. Please choose images before uploading."
         else:
             for f in files:
                 Photo.objects.create(
                     image=f,
                     uploaded_by=request.user,
-                    uploaded_at=timezone.now(),
                 )
-            return redirect("wildlife:gallery")
+            return redirect("wildlife:upload_photos")  # stay on upload page
 
-    return render(request, "wildlife/upload.html", {"error": error})
+    # Show this user’s latest uploads on the same page
+    recent_photos = Photo.objects.filter(uploaded_by=request.user).order_by("-uploaded_at")[:50]
 
+    return render(request, "wildlife/upload.html", {
+        "error": error,
+        "recent_photos": recent_photos,
+        "camera_options": Camera.objects.all().order_by("name"),
+    })
+
+@login_required
+@require_POST
+def analyze_photo(request, pk):
+    """Process a photo to extract metadata and run animal classification"""
+    require_researcher(request.user)
+
+    photo = get_object_or_404(Photo, pk=pk)
+    if photo.uploaded_by != request.user:
+        return HttpResponseForbidden("You can only analyze your own uploaded photos.")
+    
+    try:
+        img = Image.open(photo.image.path)
+        # strip = crop_bottom_strip(img, pct=0.05).convert("L")
+        strip = crop_bottom_strip(img, pct=0.045).convert("L")
+
+        text = pytesseract.image_to_string(strip)
+        print("OCR TEXT >>>", repr(text))
+
+        strip = crop_bottom_strip(img, pct=0.05).convert("L")
+
+        # upscale to help OCR
+        scale = 3
+        strip = strip.resize((strip.width * scale, strip.height * scale))
+
+        # binarize (white text on black bar)
+        strip = strip.point(lambda p: 255 if p > 140 else 0)
+
+        config = "--oem 1 --psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/:.AMPMCHGinHg "
+
+        w, h = strip.size
+
+        # Split into regions: left (temp/pressure), center (camera), right (date/time)
+        left   = strip.crop((0, 0, int(w * 0.40), h))
+        center = strip.crop((int(w * 0.35), 0, int(w * 0.75), h))
+        right  = strip.crop((int(w * 0.70), 0, w, h))
+
+        t_left   = pytesseract.image_to_string(left, config=config)
+        t_center = pytesseract.image_to_string(center, config=config)
+        t_right  = pytesseract.image_to_string(right, config=config)
+
+        text = f"{t_left}\n{t_center}\n{t_right}"
+
+        print("OCR LEFT >>>", repr(t_left))
+        print("OCR CENTER >>>", repr(t_center))
+        print("OCR RIGHT >>>", repr(t_right))
+        print("OCR ALL >>>", repr(text))
+
+    except Exception as e:
+        print("OCR ERROR:", e)
+        return HttpResponseForbidden("OCR failed. Is Tesseract installed?")
+    
+
+    # extract metadata
+    data = extract_overlay_meta(text)
+
+    # set camera
+    if data.camera_name and photo.camera is None:
+        # only assing if camera exists
+        cam = Camera.objects.filter(name=data.camera_name).first()
+        if cam:
+            photo.camera = cam
+
+
+    # set other meta data
+    if data.date_taken:
+        photo.date_taken = data.date_taken
+    if data.time_taken:
+        photo.time_taken = data.time_taken
+    if data.temperature_c is not None:
+        photo.temperature = data.temperature_c
+    if data.pressure_inhg is not None:
+        photo.pressure = data.pressure_inhg
+
+    print("PARSED >>>",
+      "camera=", getattr(data, "camera_name", None),
+      "date=", getattr(data, "date_taken", None),
+      "time=", getattr(data, "time_taken", None),
+      "temp=", getattr(data, "temperature_c", None),
+      "press=", getattr(data, "pressure_inhg", None))
+
+    # save updates
+    photo.save()
+    return redirect("wildlife:upload_photos")
+
+
+@login_required
+@require_POST
+def publish_photo(request, pk):
+    require_researcher(request.user)
+    photo = get_object_or_404(Photo, pk=pk)
+
+    # If you want only uploader to publish, enforce here:
+    if photo.uploaded_by != request.user:
+        return HttpResponseForbidden("You can only publish your own uploaded photos.")
+    
+    # require analysis before publishing
+    if photo.date_taken is None or photo.time_taken is None or photo.temperature is None or photo.pressure is None:
+        return HttpResponseForbidden("Photo must be analyzed before publishing.")
+    photo.is_published = True
+
+    photo.is_published = True
+    photo.save()
+    return redirect("wildlife:upload_photos")
 
 @login_required
 def edit_photo(request, pk):

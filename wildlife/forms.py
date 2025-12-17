@@ -16,7 +16,16 @@ class PhotoUploadForm(forms.Form):
 class PhotoEditForm(forms.ModelForm):
     class Meta:
         model = Photo
-        fields = ["date_taken", "environment", "latitude", "longitude", "pressure", "camera"]
+        fields = [
+            "camera",
+            "date_taken",
+            "time_taken",
+            "temperature",
+            "pressure",
+            "latitude",
+            "longitude",
+            "is_published",
+        ]
 
 
 class PhotoDetectionForm(forms.ModelForm):

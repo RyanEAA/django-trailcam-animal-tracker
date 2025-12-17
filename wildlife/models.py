@@ -34,13 +34,16 @@ class Photo(models.Model):
     camera = models.ForeignKey(Camera, null=True, blank=True, on_delete=models.SET_NULL)
 
     date_taken = models.DateField(null=True, blank=True)
-    environment = models.CharField(max_length=255, blank=True)
+    time_taken = models.TimeField(null=True, blank=True)
+    temperature = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
 
     # Photo’s location (can be copied from camera base lat/long)
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
 
     pressure = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+
+    is_published = models.BooleanField(default=False)
 
     uploaded_by = models.ForeignKey(
         'wildlife.User',
