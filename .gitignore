@@ -3,5 +3,8 @@
 # Ignore everything inside the media folder
 /media/*
 
+# Ignore everything inside the debug folder
+/media/*
+
 # But keep the folder itself when a .gitkeep file is present
 !/media/.gitkeep

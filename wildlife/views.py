@@ -93,7 +93,6 @@ def photo_detail(request, pk):
     photo = get_object_or_404(Photo, pk=pk)
     return render(request, "wildlife/photo_detail.html", {"photo": photo})
 
-
 @login_required
 def researcher_dashboard(request):
     require_researcher(request.user)
@@ -121,7 +120,7 @@ def upload_photos(request):
             return redirect("wildlife:upload_photos")  # stay on upload page
 
     # Show this user’s latest uploads on the same page
-    recent_photos = Photo.objects.filter(uploaded_by=request.user).order_by("-uploaded_at")[:50]
+    recent_photos = Photo.objects.filter(is_published=False).order_by("-uploaded_at")[:50]
 
     return render(request, "wildlife/upload.html", {
         "error": error,
@@ -136,8 +135,6 @@ def analyze_photo(request, pk):
     require_researcher(request.user)
 
     photo = get_object_or_404(Photo, pk=pk)
-    if photo.uploaded_by != request.user:
-        return HttpResponseForbidden("You can only analyze your own uploaded photos.")
     
     try:
         img = Image.open(photo.image.path)
@@ -217,10 +214,6 @@ def analyze_photo(request, pk):
 def publish_photo(request, pk):
     require_researcher(request.user)
     photo = get_object_or_404(Photo, pk=pk)
-
-    # If you want only uploader to publish, enforce here:
-    if photo.uploaded_by != request.user:
-        return HttpResponseForbidden("You can only publish your own uploaded photos.")
     
     # require analysis before publishing
     if photo.date_taken is None or photo.time_taken is None or photo.temperature is None or photo.pressure is None:
@@ -250,15 +243,34 @@ def edit_photo(request, pk):
     return render(request, "wildlife/edit_photo.html", {"form": form, "photo": photo})
 
 @login_required
-def delete_photo(request, pk):
+@require_POST
+def delete_photo_staging(request, pk):
     require_researcher(request.user)
     photo = get_object_or_404(Photo, pk=pk)
 
-    if request.method == "POST":
-        photo.delete()
-        return redirect("wildlife:researcher_dashboard")
+    if photo.is_published:
+        return HttpResponseForbidden("Cannot delete published photos")
+    
+    # deleting file form os
+    if photo.image and os.path.isfile(photo.image.path):
+        os.remove(photo.image.path)
 
-    return render(request, "wildlife/confirm_delete.html", {"photo": photo})
+    photo.delete()
+    return redirect("wildlife:upload_photos")
+
+@login_required
+@require_POST
+def unpublish_photo(request, pk):
+    require_researcher(request.user)
+    photo = get_object_or_404(Photo, pk=pk)
+
+    if not photo.is_published:
+        return HttpResponseForbidden("Photo is alread unpublished.")
+    
+    photo.is_publihsed = False
+    photo.save()
+
+    return redirect("wildlife:gallery")
 
 @login_required
 def export_photos_csv(request):

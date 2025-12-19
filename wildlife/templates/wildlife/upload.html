@@ -220,6 +220,15 @@
               <button class="btn btn-primary" type="submit">Publish</button>
             </form>
           {% endif %}
+
+          <form method="post" action="{% url 'wildlife:delete_photo_staging' photo.id %}">
+          {% csrf_token %}
+            <button class="btn" type="submit"
+              onclick="return confirm('Delete this unpublished photo? This cannot be undone.');">
+              Delete
+            </button>
+          </form>
+
         </div>
       </div>
     {% endfor %}
