@@ -249,7 +249,7 @@ def delete_photo_staging(request, pk):
     photo = get_object_or_404(Photo, pk=pk)
 
     if photo.is_published:
-        return HttpResponseForbidden("Cannot delete published photos")
+        return HttpResponseForbidden("Cannot delete published photos. Unpublish first.")
     
     # deleting file form os
     if photo.image and os.path.isfile(photo.image.path):
@@ -267,7 +267,7 @@ def unpublish_photo(request, pk):
     if not photo.is_published:
         return HttpResponseForbidden("Photo is alread unpublished.")
     
-    photo.is_publihsed = False
+    photo.is_published = False
     photo.save()
 
     return redirect("wildlife:gallery")
