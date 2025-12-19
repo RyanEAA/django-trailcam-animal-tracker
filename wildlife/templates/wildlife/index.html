@@ -1,2 +1,105 @@
-<h1>Trail Cam Site Loaded Successfully!</h1>
-<p>If you see this page, your view + routing works.</p>
+{% extends "wildlife/base.html" %}
+
+{% block title %}Trailcam Wildlife Research{% endblock %}
+
+{% block content %}
+<div class="landing">
+
+  <!-- Hero -->
+  <section class="hero">
+    <h1>Trailcam Wildlife Research Platform</h1>
+    <p class="subtitle">
+      A collaborative system for analyzing, validating, and publishing
+      wildlife trail camera data.
+    </p>
+
+    <div class="hero-actions">
+      <a href="{% url 'wildlife:gallery' %}" class="btn btn-primary">
+        View Public Gallery
+      </a>
+
+      {% if user.is_authenticated and user.is_researcher %}
+        <a href="{% url 'wildlife:upload_photos' %}" class="btn">
+          Researcher Upload
+        </a>
+      {% endif %}
+    </div>
+  </section>
+
+  <!-- About -->
+  <section class="section">
+    <h2>About the Project</h2>
+    <p>
+      This platform was designed to support wildlife researchers working with
+      large volumes of trail camera imagery. It provides a shared workflow
+      for uploading images, extracting metadata, reviewing results, and
+      publishing only high-quality data to the public.
+    </p>
+
+    <p>
+      By combining automated OCR analysis with human validation, the system
+      ensures accuracy while enabling collaboration across research teams.
+    </p>
+  </section>
+
+  <!-- Workflow -->
+  <section class="section light">
+    <h2>Research Workflow</h2>
+
+    <div class="workflow-grid">
+      <div class="workflow-step">
+        <h3>1. Upload</h3>
+        <p>
+          Researchers upload trailcam images into a shared staging area.
+          Images are not public at this stage.
+        </p>
+      </div>
+
+      <div class="workflow-step">
+        <h3>2. Analyze</h3>
+        <p>
+          Metadata is extracted automatically using OCR, including camera ID,
+          timestamp, temperature, and pressure.
+        </p>
+      </div>
+
+      <div class="workflow-step">
+        <h3>3. Review</h3>
+        <p>
+          Researchers collaboratively verify and edit extracted metadata
+          before publication.
+        </p>
+      </div>
+
+      <div class="workflow-step">
+        <h3>4. Publish</h3>
+        <p>
+          Validated images are published to the public gallery for viewing
+          and downstream analysis.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="section">
+    <h2>Key Features</h2>
+
+    <ul class="features">
+      <li>Shared researcher staging area</li>
+      <li>OCR-based metadata extraction</li>
+      <li>Inline metadata editing with validation</li>
+      <li>Publish / unpublish workflow</li>
+      <li>Clean, accessible public gallery</li>
+    </ul>
+  </section>
+
+  <!-- Footer -->
+  <section class="footer">
+    <p>
+      Built for collaborative wildlife research.
+    </p>
+  </section>
+
+</div>
+{% endblock %}

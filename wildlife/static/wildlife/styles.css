@@ -283,3 +283,101 @@ body{
 .btn-danger:hover{
   background: #c0392b;
 }
+
+/* Landing page */
+.landing {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+/* Hero */
+.hero {
+  text-align: center;
+  padding: 48px 16px 36px;
+}
+
+.hero h1 {
+  font-size: 2.4rem;
+  margin-bottom: 12px;
+}
+
+.hero .subtitle {
+  font-size: 1.1rem;
+  color: #555;
+  max-width: 680px;
+  margin: 0 auto 24px;
+}
+
+.hero-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Sections */
+.section {
+  padding: 36px 16px;
+}
+
+.section.light {
+  background: #f7f8fa;
+  border-radius: 16px;
+}
+
+.section h2 {
+  margin-bottom: 14px;
+}
+
+.section p {
+  max-width: 760px;
+  line-height: 1.6;
+}
+
+/* Workflow */
+.workflow-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.workflow-step {
+  background: white;
+  padding: 18px;
+  border-radius: 12px;
+  border: 1px solid #e0e0e0;
+}
+
+.workflow-step h3 {
+  margin-top: 0;
+}
+
+/* Features */
+.features {
+  list-style: none;
+  padding-left: 0;
+  margin-top: 16px;
+}
+
+.features li {
+  padding: 6px 0;
+  position: relative;
+  padding-left: 20px;
+}
+
+.features li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: #2c6bed;
+  font-weight: bold;
+}
+
+/* Footer */
+.footer {
+  text-align: center;
+  padding: 28px 0;
+  color: #666;
+  font-size: 0.9rem;
+}
