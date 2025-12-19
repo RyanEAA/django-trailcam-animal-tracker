@@ -12,8 +12,10 @@ urlpatterns = [
     path("photo/<int:pk>/publish/", views.publish_photo, name="publish_photo"),
 
     path("photo/<int:pk>/delete-staging/", views.delete_photo_staging, name="delete_photo_staging"),
-    path("photo/<int:pk>/edit/", views.unpublish_photo, name="unpublish_photo"),
-    
+    path("photo/<int:pk>/meta/update/", views.update_photo_meta, name="update_photo_meta"),
+    # upublish photo
+    path("photo/<int:pk>/unpublish/", views.unpublish_photo, name="unpublish_photo"),
+
 
 
     # optional detail/edit/delete

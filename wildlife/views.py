@@ -20,6 +20,8 @@ import pytesseract
 from PIL import Image
 import os
 from django.conf import settings
+from django.http import JsonResponse
+from datetime import datetime
 # Create your views here.
 
 # Home landing page
@@ -271,6 +273,98 @@ def unpublish_photo(request, pk):
     photo.save()
 
     return redirect("wildlife:gallery")
+
+
+@login_required
+@require_POST
+def update_photo_meta(request, pk):
+    require_researcher(request.user)
+
+    photo = get_object_or_404(Photo, pk=pk)
+
+    # Only editable in staging
+    if photo.is_published:
+        return JsonResponse({"ok": False, "error": "Cannot edit published photos. Unpublish first."}, status=403)
+
+    # Read fields (sent via fetch form-encoded)
+    camera_name = (request.POST.get("camera_name") or "").strip().upper()
+    date_taken  = (request.POST.get("date_taken") or "").strip()
+    time_taken  = (request.POST.get("time_taken") or "").strip()
+    temperature = (request.POST.get("temperature") or "").strip()
+    pressure    = (request.POST.get("pressure") or "").strip()
+
+    errors = {}
+
+    # ---- camera ----
+    if camera_name:
+        # normalize TRAILCAM5 -> TRAILCAM05
+        m = re.match(r"^TRAILCAM0*(\d{1,3})$", camera_name)
+        if not m:
+            errors["camera_name"] = "Camera must look like TRAILCAM05"
+        else:
+            n = int(m.group(1))
+            normalized = f"TRAILCAM{n:02d}"
+            cam = Camera.objects.filter(name=normalized).first()
+            if not cam:
+                errors["camera_name"] = f"Camera '{normalized}' not found. Create it first."
+            else:
+                photo.camera = cam
+
+    # ---- date ----
+    if date_taken:
+        try:
+            # expecting YYYY-MM-DD from <input type="date">
+            photo.date_taken = datetime.strptime(date_taken, "%Y-%m-%d").date()
+        except ValueError:
+            errors["date_taken"] = "Date must be YYYY-MM-DD"
+
+    # ---- time ----
+    if time_taken:
+        try:
+            # expecting HH:MM from <input type="time">
+            photo.time_taken = datetime.strptime(time_taken, "%H:%M").time()
+        except ValueError:
+            errors["time_taken"] = "Time must be HH:MM (24-hour)"
+
+    # ---- temperature ----
+    if temperature:
+        try:
+            temp_val = float(temperature)
+            if temp_val < -60 or temp_val > 80:
+                errors["temperature"] = "Temperature looks out of range (-60 to 80°C)"
+            else:
+                photo.temperature = temp_val
+        except ValueError:
+            errors["temperature"] = "Temperature must be a number"
+
+    # ---- pressure ----
+    if pressure:
+        try:
+            press_val = float(pressure)
+            if press_val < 20 or press_val > 35:
+                errors["pressure"] = "Pressure looks out of range (20 to 35 inHg)"
+            else:
+                photo.pressure = press_val
+        except ValueError:
+            errors["pressure"] = "Pressure must be a number"
+
+    if errors:
+        return JsonResponse({"ok": False, "errors": errors}, status=400)
+
+    photo.save()
+
+    # Return updated values so UI can refresh nicely
+    return JsonResponse({
+        "ok": True,
+        "photo": {
+            "id": photo.id,
+            "camera_name": photo.camera.name if photo.camera else "",
+            "date_taken": photo.date_taken.isoformat() if photo.date_taken else "",
+            "time_taken": photo.time_taken.strftime("%H:%M") if photo.time_taken else "",
+            "temperature": str(photo.temperature) if photo.temperature is not None else "",
+            "pressure": str(photo.pressure) if photo.pressure is not None else "",
+        }
+    })
 
 @login_required
 def export_photos_csv(request):

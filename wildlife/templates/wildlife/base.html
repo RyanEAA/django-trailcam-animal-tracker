@@ -1,180 +1,365 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>{% block title %}Trailcam Wildlife{% endblock %}</title>
-    <style>
-        /* Simple clean navbar */
-        body { margin: 0; font-family: Arial, sans-serif; }
+  <title>{% block title %}Trailcam Wildlife{% endblock %}</title>
 
-        nav {
-            background: #2c3e50;
-            padding: 12px 20px;
-            color: white;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+  {% load static %}
+  <link rel="stylesheet" type="text/css" href="{% static 'wildlife/styles.css' %}">
 
-        nav .left a,
-        nav .right a {
-            color: white;
-            margin-right: 15px;
-            text-decoration: none;
-            font-weight: 500;
-        }
+  <style>
+    /* Simple clean navbar */
+    body { margin: 0; font-family: Arial, sans-serif; }
 
-        nav .right form {
-            display: inline;
-        }
+    nav {
+      background: #2c3e50;
+      padding: 12px 20px;
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
 
-        nav .right button {
-            background: #e74c3c;
-            border: none;
-            color: white;
-            padding: 6px 10px;
-            cursor: pointer;
-            border-radius: 4px;
-        }
+    nav .left a,
+    nav .right a {
+      color: white;
+      margin-right: 15px;
+      text-decoration: none;
+      font-weight: 500;
+    }
 
-        nav .right button:hover {
-            background: #c0392b;
-        }
+    nav .right form { display: inline; }
 
-        .container {
-            padding: 20px;
-        }
-        .photo-card {
-            width: 200px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 8px;
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            background-color: #fafafa;
-        }
-        .photo-title {
-            font-size: 0.9rem;
-            font-weight: 600;
-            word-break: break-word;
-        }
-        .photo-preview {
-            width: 100%;
-            height: 120px;
-            object-fit: cover;
-            border: 1px solid #eee;
-            border-radius: 4px;
-        }
-        .photo-params {
-            font-size: 0.8rem;
-        }
-        .photo-params ul {
-            padding-left: 18px;
-            margin: 4px 0 0 0;
-        }
-        .hide-params .photo-params {
-            display: none;
-        }
-    </style>
-    <!-- load static -->
-    {% load static %}
-    <link rel="stylesheet" type="text/css" href="{% static 'wildlife/styles.css' %}">
+    nav .right button {
+      background: #e74c3c;
+      border: none;
+      color: white;
+      padding: 6px 10px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
 
-    {% block extra_head %}{% endblock %}
+    nav .right button:hover { background: #c0392b; }
+
+    .container { padding: 20px; }
+
+    /* Cards (your existing styles) */
+    .photo-card {
+      width: 200px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 8px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      background-color: #fafafa;
+    }
+    .photo-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      word-break: break-word;
+    }
+    .photo-preview, .photo-card img {
+      width: 100%;
+      height: 120px;
+      object-fit: cover;
+      border: 1px solid #eee;
+      border-radius: 6px;
+      display:block;
+    }
+    .photo-params { font-size: 0.8rem; }
+    .photo-params ul { padding-left: 18px; margin: 4px 0 0 0; }
+    .hide-params .photo-params { display: none; }
+
+    /* ---- Modal styles (needed!) ---- */
+    .modal-backdrop{
+      position:fixed; inset:0;
+      background:rgba(0,0,0,.55);
+      backdrop-filter: blur(6px);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+      z-index:9999;
+    }
+    .modal-panel{
+      width:min(980px, 95vw);
+      max-height:90vh;
+      overflow:auto;
+      background:#fff;
+      border-radius:16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.25);
+      position:relative;
+      padding:18px;
+    }
+    .modal-close{
+      position:absolute;
+      top:10px;
+      right:12px;
+      border:none;
+      background:transparent;
+      font-size:28px;
+      cursor:pointer;
+      line-height:1;
+    }
+    .modal-grid{
+      display:grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap:18px;
+    }
+    .modal-grid img{
+      width:100%;
+      height:auto;
+      border-radius:12px;
+    }
+    .meta-form label{ display:block; font-weight:600; margin-top:10px; }
+    .meta-form input{
+      width:100%;
+      padding:10px 12px;
+      border-radius:10px;
+      border:1px solid #d0d0d0;
+      box-sizing:border-box;
+    }
+    .meta-row-actions{
+      display:flex;
+      gap:10px;
+      margin-top:14px;
+      align-items:center;
+    }
+    .meta-error{
+      color:#b00020;
+      font-size:13px;
+      margin-top:6px;
+      white-space:pre-line;
+    }
+  </style>
+
+  {% block extra_head %}{% endblock %}
 </head>
 
 <body>
+  <nav>
+    <div class="left">
+      <a href="{% url 'wildlife:gallery' %}">Gallery</a>
 
-    <nav>
-        <div class="left">
-            <a href="{% url 'wildlife:gallery' %}">Gallery</a>
-
-            {% if user.is_authenticated and user.is_researcher %}
-                <a href="{% url 'wildlife:upload_photos' %}" style="margin-left:12px;">
-                    Upload Photos
-                </a>
-            {% endif %}
-        </div>
-
-        <div class="right">
-            {% if user.is_authenticated %}
-                <span>Hello, {{ user.username }}!</span>
-                <form action="{% url 'logout' %}" method="post" style="display:inline;">
-                    {% csrf_token %}
-                    <button type="submit">Sign Out</button>
-                </form>
-            {% else %}
-                <a href="{% url 'login' %}?next={% url 'wildlife:gallery' %}">Sign In</a>
-            {% endif %}
-        </div>
-    </nav>
-
-
-    <div class="container">
-        {% block content %}
-        {% endblock %}
-    </div>
-    <div id="cardModalBackdrop" class="card-modal-backdrop" aria-hidden="true">
-    <div class="card-modal" role="dialog" aria-modal="true">
-        <div class="modal-close">
-        <button id="cardModalCloseBtn" class="btn" type="button">Close</button>
-        </div>
-        <div id="cardModalContent"></div>
-    </div>
+      {% if user.is_authenticated and user.is_researcher %}
+        <a href="{% url 'wildlife:upload_photos' %}" style="margin-left:12px;">
+          Upload Photos
+        </a>
+      {% endif %}
     </div>
 
-    <script>
-    (function () {
-        const backdrop = document.getElementById("cardModalBackdrop");
-        const content = document.getElementById("cardModalContent");
-        const closeBtn = document.getElementById("cardModalCloseBtn");
+    <div class="right">
+      {% if user.is_authenticated %}
+        <span>Hello, {{ user.username }}!</span>
+        <form action="{% url 'logout' %}" method="post" style="display:inline;">
+          {% csrf_token %}
+          <button type="submit">Sign Out</button>
+        </form>
+      {% else %}
+        <a href="{% url 'login' %}?next={% url 'wildlife:gallery' %}">Sign In</a>
+      {% endif %}
+    </div>
+  </nav>
 
-        function openCardModal(cardEl) {
-        // clone the card so forms/buttons still work (they submit normally)
-        const clone = cardEl.cloneNode(true);
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
 
-        // IMPORTANT: inside the modal, we do NOT want click-to-open again
-        clone.classList.remove("is-clickable");
+  <!-- ✅ Single modal (ONLY ONE) -->
+  <div id="cardModal" class="modal-backdrop" style="display:none;">
+    <div class="modal-panel" role="dialog" aria-modal="true">
+      <button id="modalCloseBtn" class="modal-close" type="button" aria-label="Close">×</button>
+      <div id="cardModalContent"></div>
+    </div>
+  </div>
 
-        content.innerHTML = "";
-        content.appendChild(clone);
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const modal = document.getElementById("cardModal");
+      const modalContent = document.getElementById("cardModalContent");
+      const closeBtn = document.getElementById("modalCloseBtn");
 
-        backdrop.classList.add("is-open");
-        backdrop.setAttribute("aria-hidden", "false");
-        document.body.style.overflow = "hidden";
-        }
+      if (!modal || !modalContent) {
+        console.error("Modal elements missing: #cardModal or #cardModalContent");
+        return;
+      }
 
-        function closeCardModal() {
-        backdrop.classList.remove("is-open");
-        backdrop.setAttribute("aria-hidden", "true");
-        content.innerHTML = "";
-        document.body.style.overflow = "";
-        }
+      function getCSRFToken() {
+        const name = "csrftoken=";
+        return document.cookie
+          .split(";")
+          .map(s => s.trim())
+          .find(s => s.startsWith(name))
+          ?.slice(name.length) || "";
+      }
 
-        // Open modal when clicking a card (but NOT when clicking buttons/forms/links)
-        document.addEventListener("click", (e) => {
+      function openModal() { modal.style.display = "flex"; }
+      function closeModal() { modal.style.display = "none"; modalContent.innerHTML = ""; }
+
+      closeBtn.addEventListener("click", closeModal);
+
+      // click outside panel closes
+      modal.addEventListener("click", (e) => {
+        if (e.target === modal) closeModal();
+      });
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && modal.style.display !== "none") closeModal();
+      });
+
+      function renderModalFromCard(card) {
+        const id = card.dataset.photoId;
+        const img = card.querySelector("img")?.getAttribute("src") || "";
+        const title = card.querySelector(".photo-title")?.textContent?.trim() || "Photo";
+
+        const camera = card.dataset.camera || "";
+        const date = card.dataset.date || "";
+        const time = card.dataset.time || "";
+        const temp = card.dataset.temp || "";
+        const press = card.dataset.press || "";
+
+        modalContent.innerHTML = `
+          <h2 style="margin:6px 0 14px 0;">${title}</h2>
+
+          <div class="modal-grid">
+            <div>
+              <img src="${img}" alt="photo ${id}">
+            </div>
+
+            <div>
+              <form class="meta-form" id="metaForm">
+                <div class="meta-error" id="metaError" style="display:none;"></div>
+
+                <label>Camera (TRAILCAM05)</label>
+                <input name="camera_name" type="text" value="${camera}" placeholder="TRAILCAM05" autocomplete="off">
+
+                <label>Date</label>
+                <input name="date_taken" type="date" value="${date}">
+
+                <label>Time</label>
+                <input name="time_taken" type="time" value="${time}">
+
+                <label>Temperature (°C)</label>
+                <input name="temperature" type="number" step="0.1" min="-60" max="80" value="${temp}" placeholder="e.g. 23.0">
+
+                <label>Pressure (inHg)</label>
+                <input name="pressure" type="number" step="0.01" min="20" max="35" value="${press}" placeholder="e.g. 29.09">
+
+                <div class="meta-row-actions">
+                  <button id="saveBtn" class="btn btn-primary" type="button" style="display:none;">Save</button>
+
+                  <form method="post" action="/photo/${id}/delete-staging/" style="margin:0;">
+                    <input type="hidden" name="csrfmiddlewaretoken" value="${getCSRFToken()}">
+                    <button class="btn" type="submit"
+                      onclick="event.stopPropagation(); return confirm('Delete this unpublished photo? This cannot be undone.');">
+                      Delete
+                    </button>
+                  </form>
+                </div>
+              </form>
+            </div>
+          </div>
+        `;
+
+        const form = modalContent.querySelector("#metaForm");
+        const saveBtn = modalContent.querySelector("#saveBtn");
+        const errBox = modalContent.querySelector("#metaError");
+
+        const initialObj = Object.fromEntries(new FormData(form).entries());
+
+        form.addEventListener("input", () => {
+          const now = Object.fromEntries(new FormData(form).entries());
+          const dirty = Object.keys(now).some(k => (now[k] || "") !== (initialObj[k] || ""));
+          saveBtn.style.display = dirty ? "inline-block" : "none";
+          errBox.style.display = "none";
+          errBox.textContent = "";
+        });
+
+        form.querySelector('input[name="camera_name"]').addEventListener("input", (e) => {
+          e.target.value = e.target.value.toUpperCase().replace(/\s+/g, "");
+        });
+
+        saveBtn.addEventListener("click", async () => {
+          saveBtn.disabled = true;
+          errBox.style.display = "none";
+          errBox.textContent = "";
+
+          try {
+            const payload = new URLSearchParams();
+            for (const [k,v] of new FormData(form).entries()) payload.set(k, v);
+
+            const res = await fetch(`/photo/${id}/meta/update/`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-CSRFToken": getCSRFToken(),
+              },
+              body: payload.toString(),
+            });
+
+            const data = await res.json();
+            if (!data.ok) {
+              const msg = data.errors
+                ? Object.entries(data.errors).map(([k,v]) => `${k}: ${v}`).join("\n")
+                : (data.error || "Save failed.");
+              errBox.style.display = "block";
+              errBox.textContent = msg;
+              return;
+            }
+
+            const updated = data.photo;
+            const pageCard = document.querySelector(`.photo-card[data-photo-id="${id}"]`);
+            if (pageCard) {
+              pageCard.dataset.camera = updated.camera_name || "";
+              pageCard.dataset.date = updated.date_taken || "";
+              pageCard.dataset.time = updated.time_taken || "";
+              pageCard.dataset.temp = updated.temperature || "";
+              pageCard.dataset.press = updated.pressure || "";
+
+              const setText = (field, value) => {
+                const el = pageCard.querySelector(`.meta-field[data-field="${field}"]`);
+                if (el) el.textContent = value && value !== "" ? value : "—";
+              };
+              setText("camera_name", updated.camera_name);
+              setText("date_taken", updated.date_taken);
+              setText("time_taken", updated.time_taken);
+              setText("temperature", updated.temperature);
+              setText("pressure", updated.pressure);
+            }
+
+            // reset baseline
+            const newBaseline = Object.fromEntries(new FormData(form).entries());
+            for (const k in newBaseline) initialObj[k] = newBaseline[k];
+            saveBtn.style.display = "none";
+
+            // close modal
+            closeModal();
+
+          } catch (e) {
+            errBox.style.display = "block";
+            errBox.textContent = "Save failed. Check server logs.";
+          } finally {
+            saveBtn.disabled = false;
+          }
+        });
+
+        openModal();
+      }
+
+      document.addEventListener("click", (e) => {
         const card = e.target.closest(".photo-card.is-clickable");
         if (!card) return;
 
-        // If they clicked something interactive inside the card, don't open modal
-        if (e.target.closest("button, a, form, input, select, textarea, label")) return;
+        // don’t open modal if they clicked buttons/inputs/links inside the card
+        if (e.target.closest("button, form, a, input, select, textarea")) return;
 
-        openCardModal(card);
-        });
+        // Only enable the editor modal on /upload
+        if (!location.pathname.startsWith("/upload")) return;
 
-        // Close when clicking backdrop (outside modal)
-        backdrop.addEventListener("click", (e) => {
-        if (e.target === backdrop) closeCardModal();
-        });
-
-        closeBtn.addEventListener("click", closeCardModal);
-
-        document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") closeCardModal();
-        });
-    })();
-    </script>
-
-    </body>
+        renderModalFromCard(card);
+      });
+    });
+  </script>
+</body>
 </html>
