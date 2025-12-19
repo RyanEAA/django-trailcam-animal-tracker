@@ -1,277 +1,394 @@
 # django-trailcam-animal-tracker
 
-This project is a Django-based wildlife monitoring and research platform designed to support trail camera deployments. It enables researchers to upload and analyze trail camera images and general users to explore curated wildlife galleries. The system emphasizes reproducibility, traceability, and human-in-the-loop validation for ecological research.
 
-Project Goals
+---
 
-Centralize trail camera image management
+# 🦌 Trailcam Wildlife Research Platform
 
-Support structured metadata extraction from trail camera overlays
+A collaborative Django-based platform for **uploading, analyzing, staging, and publishing trail camera images** for wildlife research.
 
-Enable animal classification pipelines
+This project is designed to support **teams of researchers** working together to process large volumes of trailcam images by extracting metadata (via OCR), reviewing results, editing metadata, and publishing only high-quality, validated images to a public gallery.
 
-Provide a review-and-publish workflow for researchers
+---
 
-Offer a clean, read-only gallery for public users
+## ✨ Key Features
 
-User Roles & Workflows
+### 🔐 Role-Based Access
 
-1. General Users (Public / Read-Only)
+* **Public users**
 
-Who they are:
+  * View published wildlife images in the gallery
+* **Researchers**
 
-Students, faculty, or the public
+  * Upload trailcam images
+  * Analyze images using OCR
+  * Edit metadata inline
+  * Publish / unpublish images
+  * Collaborate in a shared staging area
 
-No upload or modification permissions
+---
 
-What they can do:
+### 🧪 Staging → Publishing Workflow
 
-Browse the Gallery
+* All uploaded photos enter a **shared staging area** (`/upload`)
+* Any researcher can:
 
-Filter images by:
+  * Analyze metadata
+  * Correct OCR results
+  * Delete unnecessary images
+* Only **validated images** are published to the public gallery
+* Published images can later be **unpublished** and returned to staging
 
-Species
+This workflow ensures **data quality, collaboration, and accountability**.
 
-Location / Camera
+---
 
-Date range
+### 🧠 OCR-Based Metadata Extraction
 
-View published images with verified metadata
+When a researcher clicks **Analyze**, the system:
 
-What they cannot do:
+1. Crops the bottom overlay of the trailcam image
+2. Applies OCR (Tesseract)
+3. Extracts:
 
-Upload images
+   * Camera ID (e.g. `TRAILCAM05`)
+   * Date
+   * Time
+   * Temperature (°C)
+   * Pressure (inHg)
+4. Saves parsed metadata to the database
 
-Modify metadata
+Researchers can then **review and edit** extracted values before publishing.
 
-Run analysis
+---
 
-This separation ensures data integrity and prevents unverified images from entering the public-facing gallery.
+### 📝 Inline Metadata Editing (Modal Editor)
 
-2. Researchers (Authenticated Users)
+* Clicking a photo card opens a **modal editor**
+* Metadata fields use appropriate controls:
 
-Who they are:
+  * Camera → text input (normalized)
+  * Date → date picker
+  * Time → time picker
+  * Temperature / Pressure → numeric inputs with validation
+* A **Save** button appears only when changes are made
+* Successful saves close the modal automatically
 
-Approved researchers or administrators
+---
 
-Authenticated via Django’s auth system
+### 🖼️ Gallery Experience
 
-High-Level Researcher Workflow:
+* Clean, card-based UI
+* Optional toggle to hide/show metadata
+* Hover and modal interactions for better image inspection
+* Public gallery shows **only published images**
 
-Upload Images
+---
 
-Analyze Images (manual trigger)
+## 🧱 Tech Stack
 
-Review & Edit Metadata
+| Layer            | Technology                     |
+| ---------------- | ------------------------------ |
+| Backend          | Django                         |
+| Frontend         | Django Templates + Vanilla JS  |
+| OCR              | Tesseract (via `pytesseract`)  |
+| Image Processing | Pillow                         |
+| Database         | SQLite (dev), easily swappable |
+| Auth             | Django Auth                    |
+| Styling          | CSS (externalized, modular)    |
 
-Publish to Gallery
+---
 
-This workflow intentionally introduces checkpoints to avoid accidental misclassification or metadata errors.
+## 📂 Project Structure (Relevant Parts)
 
-Detailed Researcher Workflow
+```text
+django-trailcam-animal-tracker/
+│
+├── wildlife/
+│   ├── models.py          # Photo, Camera, Species, etc.
+│   ├── views.py           # Upload, analyze, publish, unpublish
+│   ├── urls.py
+│   ├── templates/
+│   │   └── wildlife/
+│   │       ├── base.html
+│   │       ├── upload.html
+│   │       └── gallery.html
+│   ├── static/
+│   │   └── wildlife/
+│   │       └── styles.css
+│   └── utils/
+│       ├── ocr.py         # OCR + regex parsing logic
+│       └── utils.py       # Shared helpers
+│
+├── media/                 # Uploaded images
+└── manage.py
+```
 
-Step 1: Image Upload
+---
 
-Researchers upload trail camera images through a Django form
+## 🔁 Core Workflows
 
-Images are stored via Django’s media storage system
+### 1️⃣ Upload & Staging
 
-A Photo database record is created with minimal initial fields
+1. Researcher uploads images
+2. Images appear in `/upload` (staging)
+3. Images are **not public**
 
-Key idea: Uploading does not immediately publish or analyze the image.
+---
 
-Step 2: Image Analysis (Manual Trigger)
+### 2️⃣ Analysis
 
-Each uploaded image displays an Analyze button.
+1. Researcher clicks **Analyze**
+2. OCR extracts metadata
+3. Results are stored and displayed
+4. Researchers can edit metadata inline
 
-When clicked, the backend:
+---
 
-Extracts overlay metadata from the bottom of the image:
+### 3️⃣ Publishing
 
-Date
+1. Image must have valid metadata
+2. Researcher clicks **Publish**
+3. Image becomes visible in `/gallery`
 
-Time
+---
 
-Temperature (°C)
+### 4️⃣ Unpublishing
 
-Pressure (inHg)
+1. Researcher clicks **Unpublish** in gallery
+2. Image returns to staging
+3. Can be edited or deleted
 
-Runs the animal classification pipeline (if enabled)
+---
 
-Stores extracted values back into the database
+## 🛡️ Data Integrity & Validation
 
-Why manual analysis instead of automatic?
+* Metadata inputs enforce:
 
-Avoids wasted compute on low-quality or test images
+  * Valid dates/times
+  * Reasonable temperature/pressure ranges
+* Server-side validation ensures correctness
+* OCR errors are expected and handled gracefully
 
-Allows batch uploads followed by selective analysis
+---
 
-Keeps researchers in control of data validation
+## 🚀 Getting Started
 
-Step 3: Metadata Review & Editing
+### Install dependencies
 
-After analysis:
+```bash
+pip install django pillow pytesseract
+```
 
-Researchers can manually edit:
+### Install Tesseract (macOS)
 
-Species label
+```bash
+brew install tesseract
+```
 
-Confidence notes
+### Run server
 
-Camera assignment
+```bash
+python manage.py migrate
+python manage.py runserver
+```
 
-Metadata can be corrected if OCR or classification is imperfect
+---
 
-This step acknowledges that ML outputs are assistive, not authoritative.
+## 🧭 Future Enhancements
 
-Step 4: Publish to Gallery
+* Automated animal classification (CV model)
+* Batch analysis
+* Per-field confidence scores
+* Researcher activity logs
+* Dataset export tooling
+* Deployment (Docker / cloud)
 
-Once validated, researchers can mark an image as published.
+---
 
-Published images:
+## 📜 License
 
-Become visible in the public gallery
+This project is intended for **academic and research use**.
+License can be added as needed.
 
-Are locked from further automated modification
+---
 
-Application Structure & File Responsibilities
 
-Below is a conceptual overview of how files and modules interact.
 
-Models (models.py)
+## 🔁 User Flow Diagrams
 
-Core database entities:
+```mermaid
+flowchart TD
 
-Photo
+%% ========= ROLES / SWIMLANES =========
+subgraph Researcher
+  R1([Log in])
+  R2[Upload trailcam images]
+  R3[View shared staging area]
+  R4[Click Analyze]
+  R5[Review & edit metadata modal-view]
+  R6{Publish or Delete?}
+  R7[Publish image]
+  R8[Delete image]
+  R9[View public gallery]
+  R10[Unpublish image]
+end
+
+subgraph System
+  S1[Receive uploads]
+  S2[Store images in staging]
+  S3[Run OCR to extract metadata]
+  S4[Return extracted metadata]
+  S5[Save edited metadata]
+  S6[Move image to public gallery]
+  S7[Permanently delete image]
+  S8[Return image to staging]
+end
+
+subgraph Public_User
+  P1[Browse public gallery]
+  P2[View image + metadata]
+end
+
+%% ========= MAIN FLOW =========
+R1 --> R2 --> S1 --> S2 --> R3 --> R4 --> S3 --> S4 --> R5 --> S5 --> R6
+
+%% ========= DECISION =========
+R6 -->|Publish| R7 --> S6 --> P1 --> P2
+R6 -->|Delete| R8 --> S7 --> R3
+
+%% ========= LOOPS =========
+R5 -->|Re-analyze| R4
+R9 --> R10 --> S8 --> R3
+```
+
+## 🧱 System Architecture Diagram
 
-Image file
-
-Extracted metadata (date, time, temperature, pressure)
-
-Classification results
-
-Publication status
-
-Species
-
-Canonical species labels
-
-Used for filtering and consistency
-
-Camera
-
-Physical trail camera metadata
-
-Location and deployment info
-
-These models form the single source of truth for the system.
-
-Forms (forms.py)
-
-Responsible for:
-
-Image upload validation
-
-Metadata editing interfaces
-
-Keeps validation logic centralized and reusable across views.
-
-Views (views.py)
-
-Orchestrates user interactions and workflows:
-
-Upload views
-
-Gallery views
-
-Analyze endpoints
-
-Publish actions
-
-Views coordinate between:
-
-Models (data)
-
-Services (logic)
-
-Templates (presentation)
-
-Services Layer (services/)
-
-Purpose: isolate complex logic from views.
-
-Typical responsibilities:
-
-Image processing
-
-OCR-based metadata extraction
-
-ML inference calls
-
-Post-processing cleanup
-
-This keeps views thin and testable.
-
-Computer Vision Pipeline (cv/)
-
-Handles:
-
-Animal classification
-
-Image preprocessing
-
-Model loading and inference
-
-Designed to be swappable so models can evolve without touching Django logic.
-
-Templates (templates/)
-
-Responsible for:
-
-Upload forms
-
-Researcher dashboards
-
-Public gallery views
-
-Templates reflect workflow states:
-
-Uploaded
-
-Analyzed
-
-Published
-
-Utilities (utils.py)
-
-Common helpers such as:
-
-Permission checks (e.g., researcher-only actions)
-
-Reusable query logic
-
-Design Principles
-
-Human-in-the-loop ML: researchers validate results
-
-Separation of concerns: views vs services vs CV
-
-Reproducibility: metadata is explicit and traceable
-
-Scalability: batch uploads + deferred analysis
-
-Future Extensions
-
-Batch analysis jobs
-
-Confidence scores for OCR and classification
-
-Temporal analytics (activity patterns)
-
-Export tools for downstream ecological analysis
-
-Summary
-
-This project is designed not just as an image gallery, but as a research-grade data pipeline for wildlife monitoring. By separating upload, analysis, validation, and publication, it balances automation with scientific rigor.
-
-If you are extending this system, aim to keep automation assistive and researcher intent explicit.
+``` mermaid
+flowchart LR
+
+%% =======================
+%% Django Wildlife Platform — System Architecture
+%% =======================
+
+%% --- FRONTEND ---
+subgraph FE[Frontend]
+  T[Django Templates HTML]
+  JS[Vanilla JavaScript]
+  CSS[CSS]
+end
+
+%% --- BACKEND ---
+subgraph BE[Backend]
+  V[Django Views]
+  AUTH[Auth & Permissions\nResearcher vs Public]
+  ORM[Django ORM]
+end
+
+%% --- UTILITIES / PIPELINE ---
+subgraph U[Utilities / Analysis Pipeline]
+  PIL[Pillow\nimage preprocessing]
+  OCR[Tesseract OCR\ntext extraction]
+  RX[Regex Metadata Extractor\nparse timestamp / camera id / etc.]
+end
+
+%% --- STORAGE ---
+subgraph ST[Storage]
+  MEDIA[(Media Files\nuploaded images)]
+  DB[(Database\nPhotos • Cameras • Metadata)]
+end
+
+%% --- USERS ---
+R[Researcher browser]
+P[Public User browser]
+
+%% =======================
+%% General request flow
+%% =======================
+R -->|HTTP GET/POST| V
+P -->|HTTP GET| V
+
+V --> AUTH
+AUTH -->|allowed| V
+
+V -->|render HTML| T
+T --> JS
+T --> CSS
+
+%% =======================
+%% Upload -> Staging
+%% =======================
+R -->|Upload images| V
+V -->|save file| MEDIA
+V -->|create/update Photo row staging| ORM
+ORM --> DB
+
+%% =======================
+%% Analyze pipeline data flow
+%% =======================
+R -->|Click Analyze AJAX/fetch| JS
+JS -->|POST /analyze photo_id| V
+
+V -->|load image bytes| MEDIA
+V -->|run preprocessing| PIL
+PIL --> OCR
+OCR --> RX
+
+RX -->|metadata fields + confidence| V
+V -->|persist extracted metadata| ORM
+ORM --> DB
+
+V -->|JSON response| JS
+JS -->|open modal for review/edit| T
+
+%% =======================
+%% Publish / Unpublish / Delete
+%% =======================
+R -->|Publish modal submit| JS
+JS -->|POST /publish photo_id| V
+V -->|set status=published| ORM --> DB
+
+P -->|Browse gallery| V
+V -->|query published photos| ORM --> DB
+V -->|serve images| MEDIA
+
+R -->|Unpublish| JS -->|POST /unpublish photo_id| V
+V -->|set status=staging| ORM --> DB
+
+R -->|Delete| JS -->|POST /delete photo_id| V
+V -->|delete DB rows| ORM --> DB
+V -->|delete media file| MEDIA
+
+```
+
+## 🗃️ Data Model Diagram 
+
+```mermaid
+erDiagram
+  USER ||--o{ PHOTO : "uploads"
+  CAMERA ||--o{ PHOTO : "captures"
+
+  USER {
+    int id PK
+    string username
+    boolean is_researcher
+  }
+
+  CAMERA {
+    int id PK
+    string name
+  }
+
+  PHOTO {
+    int id PK
+    string image
+    boolean is_published
+    date date_taken
+    time time_taken
+    float temperature
+    float pressure
+    int camera_id FK
+    int uploaded_by_id FK
+  }
+
+```
