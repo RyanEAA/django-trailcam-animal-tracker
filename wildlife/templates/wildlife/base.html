@@ -4,172 +4,46 @@
   <title>{% block title %}Trailcam Wildlife{% endblock %}</title>
 
   {% load static %}
-  <link rel="stylesheet" type="text/css" href="{% static 'wildlife/styles.css' %}">
-
-  <style>
-    /* Simple clean navbar */
-    body { margin: 0; font-family: Arial, sans-serif; }
-
-    nav {
-      background: #2c3e50;
-      padding: 12px 20px;
-      color: white;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    nav .left a,
-    nav .right a {
-      color: white;
-      margin-right: 15px;
-      text-decoration: none;
-      font-weight: 500;
-    }
-
-    nav .right form { display: inline; }
-
-    nav .right button {
-      background: #e74c3c;
-      border: none;
-      color: white;
-      padding: 6px 10px;
-      cursor: pointer;
-      border-radius: 4px;
-    }
-
-    nav .right button:hover { background: #c0392b; }
-
-    .container { padding: 20px; }
-
-    /* Cards (your existing styles) */
-    .photo-card {
-      width: 200px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 8px;
-      box-sizing: border-box;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      background-color: #fafafa;
-    }
-    .photo-title {
-      font-size: 0.9rem;
-      font-weight: 600;
-      word-break: break-word;
-    }
-    .photo-preview, .photo-card img {
-      width: 100%;
-      height: 120px;
-      object-fit: cover;
-      border: 1px solid #eee;
-      border-radius: 6px;
-      display:block;
-    }
-    .photo-params { font-size: 0.8rem; }
-    .photo-params ul { padding-left: 18px; margin: 4px 0 0 0; }
-    .hide-params .photo-params { display: none; }
-
-    /* ---- Modal styles (needed!) ---- */
-    .modal-backdrop{
-      position:fixed; inset:0;
-      background:rgba(0,0,0,.55);
-      backdrop-filter: blur(6px);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      padding:24px;
-      z-index:9999;
-    }
-    .modal-panel{
-      width:min(980px, 95vw);
-      max-height:90vh;
-      overflow:auto;
-      background:#fff;
-      border-radius:16px;
-      box-shadow: 0 20px 60px rgba(0,0,0,.25);
-      position:relative;
-      padding:18px;
-    }
-    .modal-close{
-      position:absolute;
-      top:10px;
-      right:12px;
-      border:none;
-      background:transparent;
-      font-size:28px;
-      cursor:pointer;
-      line-height:1;
-    }
-    .modal-grid{
-      display:grid;
-      grid-template-columns: 1.2fr 0.8fr;
-      gap:18px;
-    }
-    .modal-grid img{
-      width:100%;
-      height:auto;
-      border-radius:12px;
-    }
-    .meta-form label{ display:block; font-weight:600; margin-top:10px; }
-    .meta-form input{
-      width:100%;
-      padding:10px 12px;
-      border-radius:10px;
-      border:1px solid #d0d0d0;
-      box-sizing:border-box;
-    }
-    .meta-row-actions{
-      display:flex;
-      gap:10px;
-      margin-top:14px;
-      align-items:center;
-    }
-    .meta-error{
-      color:#b00020;
-      font-size:13px;
-      margin-top:6px;
-      white-space:pre-line;
-    }
-  </style>
+  <link rel="stylesheet" href="{% static 'wildlife/styles.css' %}">
 
   {% block extra_head %}{% endblock %}
 </head>
 
 <body>
-  <nav>
-    <div class="left">
-      <a href="{% url 'wildlife:gallery' %}">Gallery</a>
+  <nav class="nav">
+    <div class="nav-left">
+      <a class="nav-link" href="{% url 'wildlife:gallery' %}">Gallery</a>
 
       {% if user.is_authenticated and user.is_researcher %}
-        <a href="{% url 'wildlife:upload_photos' %}" style="margin-left:12px;">
-          Upload Photos
-        </a>
+        <a class="nav-link" href="{% url 'wildlife:upload_photos' %}">Upload Photos</a>
       {% endif %}
     </div>
 
-    <div class="right">
+    <div class="nav-right">
       {% if user.is_authenticated %}
-        <span>Hello, {{ user.username }}!</span>
-        <form action="{% url 'logout' %}" method="post" style="display:inline;">
+        <span class="nav-greeting">Hello, {{ user.username }}!</span>
+        <form class="nav-form" action="{% url 'logout' %}" method="post">
           {% csrf_token %}
-          <button type="submit">Sign Out</button>
+          <button class="btn btn-danger" type="submit">Sign Out</button>
         </form>
       {% else %}
-        <a href="{% url 'login' %}?next={% url 'wildlife:gallery' %}">Sign In</a>
+        <a class="nav-link" href="{% url 'login' %}?next={% url 'wildlife:gallery' %}">Sign In</a>
       {% endif %}
     </div>
   </nav>
 
-  <div class="container">
+  <main class="container">
     {% block content %}{% endblock %}
-  </div>
+  </main>
 
-  <!-- ✅ Single modal (ONLY ONE) -->
-  <div id="cardModal" class="modal-backdrop" style="display:none;">
-    <div class="modal-panel" role="dialog" aria-modal="true">
+  <!-- ✅ Single modal -->
+  <div id="cardModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
       <button id="modalCloseBtn" class="modal-close" type="button" aria-label="Close">×</button>
+
+      <!-- toast (hidden by default) -->
+      <div id="modalToast" class="toast" role="status" aria-live="polite"></div>
+
       <div id="cardModalContent"></div>
     </div>
   </div>
@@ -179,33 +53,40 @@
       const modal = document.getElementById("cardModal");
       const modalContent = document.getElementById("cardModalContent");
       const closeBtn = document.getElementById("modalCloseBtn");
-
-      if (!modal || !modalContent) {
-        console.error("Modal elements missing: #cardModal or #cardModalContent");
-        return;
-      }
+      const toast = document.getElementById("modalToast");
 
       function getCSRFToken() {
         const name = "csrftoken=";
-        return document.cookie
-          .split(";")
-          .map(s => s.trim())
-          .find(s => s.startsWith(name))
-          ?.slice(name.length) || "";
+        return document.cookie.split(";").map(s => s.trim())
+          .find(s => s.startsWith(name))?.slice(name.length) || "";
       }
 
-      function openModal() { modal.style.display = "flex"; }
-      function closeModal() { modal.style.display = "none"; modalContent.innerHTML = ""; }
+      function showToast(msg) {
+        toast.textContent = msg;
+        toast.classList.add("is-showing");
+        window.clearTimeout(showToast._t);
+        showToast._t = window.setTimeout(() => toast.classList.remove("is-showing"), 1200);
+      }
+
+      function openModal() {
+        modal.classList.add("is-open");
+        modal.setAttribute("aria-hidden", "false");
+      }
+
+      function closeModal() {
+        modal.classList.remove("is-open");
+        modal.setAttribute("aria-hidden", "true");
+        modalContent.innerHTML = "";
+      }
 
       closeBtn.addEventListener("click", closeModal);
 
-      // click outside panel closes
       modal.addEventListener("click", (e) => {
         if (e.target === modal) closeModal();
       });
 
       document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape" && modal.style.display !== "none") closeModal();
+        if (e.key === "Escape" && modal.classList.contains("is-open")) closeModal();
       });
 
       function renderModalFromCard(card) {
@@ -220,16 +101,16 @@
         const press = card.dataset.press || "";
 
         modalContent.innerHTML = `
-          <h2 style="margin:6px 0 14px 0;">${title}</h2>
+          <h2 id="modalTitle" class="modal-title">${title}</h2>
 
           <div class="modal-grid">
             <div>
-              <img src="${img}" alt="photo ${id}">
+              <img class="modal-image" src="${img}" alt="photo ${id}">
             </div>
 
             <div>
               <form class="meta-form" id="metaForm">
-                <div class="meta-error" id="metaError" style="display:none;"></div>
+                <div class="meta-error" id="metaError"></div>
 
                 <label>Camera (TRAILCAM05)</label>
                 <input name="camera_name" type="text" value="${camera}" placeholder="TRAILCAM05" autocomplete="off">
@@ -249,7 +130,7 @@
                 <div class="meta-row-actions">
                   <button id="saveBtn" class="btn btn-primary" type="button" style="display:none;">Save</button>
 
-                  <form method="post" action="/photo/${id}/delete-staging/" style="margin:0;">
+                  <form method="post" action="/photo/${id}/delete-staging/" class="inline-form">
                     <input type="hidden" name="csrfmiddlewaretoken" value="${getCSRFToken()}">
                     <button class="btn" type="submit"
                       onclick="event.stopPropagation(); return confirm('Delete this unpublished photo? This cannot be undone.');">
@@ -266,28 +147,34 @@
         const saveBtn = modalContent.querySelector("#saveBtn");
         const errBox = modalContent.querySelector("#metaError");
 
-        const initialObj = Object.fromEntries(new FormData(form).entries());
+        const baseline = Object.fromEntries(new FormData(form).entries());
 
-        form.addEventListener("input", () => {
-          const now = Object.fromEntries(new FormData(form).entries());
-          const dirty = Object.keys(now).some(k => (now[k] || "") !== (initialObj[k] || ""));
-          saveBtn.style.display = dirty ? "inline-block" : "none";
-          errBox.style.display = "none";
-          errBox.textContent = "";
-        });
+        function setError(msg) {
+          errBox.textContent = msg || "";
+          errBox.style.display = msg ? "block" : "none";
+        }
+        setError("");
 
+        // normalize camera input
         form.querySelector('input[name="camera_name"]').addEventListener("input", (e) => {
           e.target.value = e.target.value.toUpperCase().replace(/\s+/g, "");
         });
 
+        // show save when dirty
+        form.addEventListener("input", () => {
+          const now = Object.fromEntries(new FormData(form).entries());
+          const dirty = Object.keys(now).some(k => (now[k] || "") !== (baseline[k] || ""));
+          saveBtn.style.display = dirty ? "inline-block" : "none";
+          setError("");
+        });
+
         saveBtn.addEventListener("click", async () => {
           saveBtn.disabled = true;
-          errBox.style.display = "none";
-          errBox.textContent = "";
+          setError("");
 
           try {
             const payload = new URLSearchParams();
-            for (const [k,v] of new FormData(form).entries()) payload.set(k, v);
+            for (const [k, v] of new FormData(form).entries()) payload.set(k, v);
 
             const res = await fetch(`/photo/${id}/meta/update/`, {
               method: "POST",
@@ -299,15 +186,16 @@
             });
 
             const data = await res.json();
+
             if (!data.ok) {
               const msg = data.errors
-                ? Object.entries(data.errors).map(([k,v]) => `${k}: ${v}`).join("\n")
+                ? Object.entries(data.errors).map(([k, v]) => `${k}: ${v}`).join("\n")
                 : (data.error || "Save failed.");
-              errBox.style.display = "block";
-              errBox.textContent = msg;
+              setError(msg);
               return;
             }
 
+            // update card dataset (so page stays in sync)
             const updated = data.photo;
             const pageCard = document.querySelector(`.photo-card[data-photo-id="${id}"]`);
             if (pageCard) {
@@ -316,29 +204,15 @@
               pageCard.dataset.time = updated.time_taken || "";
               pageCard.dataset.temp = updated.temperature || "";
               pageCard.dataset.press = updated.pressure || "";
-
-              const setText = (field, value) => {
-                const el = pageCard.querySelector(`.meta-field[data-field="${field}"]`);
-                if (el) el.textContent = value && value !== "" ? value : "—";
-              };
-              setText("camera_name", updated.camera_name);
-              setText("date_taken", updated.date_taken);
-              setText("time_taken", updated.time_taken);
-              setText("temperature", updated.temperature);
-              setText("pressure", updated.pressure);
             }
 
-            // reset baseline
-            const newBaseline = Object.fromEntries(new FormData(form).entries());
-            for (const k in newBaseline) initialObj[k] = newBaseline[k];
-            saveBtn.style.display = "none";
+            showToast("Saved ✓");
 
-            // close modal
-            closeModal();
+            // close after a short beat so user sees the toast
+            setTimeout(() => closeModal(), 450);
 
           } catch (e) {
-            errBox.style.display = "block";
-            errBox.textContent = "Save failed. Check server logs.";
+            setError("Save failed. Check server logs.");
           } finally {
             saveBtn.disabled = false;
           }
@@ -347,16 +221,12 @@
         openModal();
       }
 
+      // Click card -> open modal (only /upload)
       document.addEventListener("click", (e) => {
         const card = e.target.closest(".photo-card.is-clickable");
         if (!card) return;
-
-        // don’t open modal if they clicked buttons/inputs/links inside the card
         if (e.target.closest("button, form, a, input, select, textarea")) return;
-
-        // Only enable the editor modal on /upload
         if (!location.pathname.startsWith("/upload")) return;
-
         renderModalFromCard(card);
       });
     });
