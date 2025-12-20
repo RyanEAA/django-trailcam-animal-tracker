@@ -15,11 +15,12 @@ urlpatterns = [
     path("photo/<int:pk>/meta/update/", views.update_photo_meta, name="update_photo_meta"),
     # upublish photo
     path("photo/<int:pk>/unpublish/", views.unpublish_photo, name="unpublish_photo"),
+    # Cameras CRUD
+    path("cameras/", views.cameras_list, name="cameras_list"),
+    path("cameras/new/", views.camera_create, name="camera_create"),
+    path("cameras/<int:pk>/edit/", views.camera_edit, name="camera_edit"),
+    path("cameras/suggest/", views.cameras_suggest, name="cameras_suggest"),
 
 
 
-    # optional detail/edit/delete
-    # path("photo/<int:pk>/", views.photo_detail, name="photo_detail"),
-    # path("photo/<int:pk>/edit/", views.edit_photo, name="edit_photo"),
-    # path("photo/<int:pk>/delete/", views.delete_photo, name="delete_photo"),
 ]

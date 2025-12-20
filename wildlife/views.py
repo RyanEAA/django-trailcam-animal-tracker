@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.contrib import messages
 
 import csv
 
@@ -23,6 +24,13 @@ from django.conf import settings
 from django.http import JsonResponse
 from datetime import datetime
 # Create your views here.
+
+# camera imports
+from .models import Camera
+from .forms import CameraForm
+from .utils.utils import require_researcher
+
+import re
 
 # Home landing page
 def index(request):
@@ -124,10 +132,12 @@ def upload_photos(request):
     # Show this user’s latest uploads on the same page
     recent_photos = Photo.objects.filter(is_published=False).order_by("-uploaded_at")[:50]
 
+    
+
     return render(request, "wildlife/upload.html", {
         "error": error,
         "recent_photos": recent_photos,
-        "camera_options": Camera.objects.all().order_by("name"),
+        "camera_names": list(Camera.objects.filter(is_active=True).order_by("name").values_list("name", flat=True)),
     })
 
 @login_required
@@ -395,3 +405,70 @@ def export_photos_csv(request):
         ])
 
     return response
+
+
+# camera list view
+@login_required
+def cameras_list(request):
+    require_researcher(request.user)
+
+    q = (request.GET.get("q") or "").strip()
+    qs = Camera.objects.all().order_by("name")
+    if q:
+        qs = qs.filter(Q(name__icontains=q) | Q(description__icontains=q))
+
+    return render(request, "wildlife/camera_list.html", {
+        "cameras": qs,
+        "search_query": q,
+    })
+
+@login_required
+def camera_create(request):
+    require_researcher(request.user)
+
+    if request.method == "POST":
+        form = CameraForm(request.POST)
+        if form.is_valid():
+            cam = form.save()
+            messages.success(request, f"Camera '{cam.name}' created.")
+            return redirect("wildlife:cameras_list")
+    else:
+        form = CameraForm()
+
+    return render(request, "wildlife/camera_form.html", {
+        "form": form,
+        "mode": "create",
+    })        
+
+# camera edit view
+@login_required
+def camera_edit(request, pk):
+    require_researcher(request.user)
+    cam = get_object_or_404(Camera, pk=pk)
+
+    if request.method == "POST":
+        form = CameraForm(request.POST, instance=cam)
+        if form.is_valid():
+            cam = form.save()
+            messages.success(request, f"Camera '{cam.name}' updated.")
+            return redirect("wildlife:cameras_list")
+    else:
+        form = CameraForm(instance=cam)
+
+    return render(request, "wildlife/camera_form.html", {
+        "form": form,
+        "mode": "edit",
+        "camera": cam,
+    })
+
+# autocomplete endpoint for camera names
+@login_required
+def cameras_suggest(request):
+    require_researcher(request.user)
+
+    q = (request.GET.get("q") or "").strip().upper()
+    qs = Camera.objects.filter(is_active=True).order_by("name")
+    if q:
+        qs = qs.filter(name__startswith=q)
+    names = list(qs.values_list("name", flat=True)[:50])
+    return JsonResponse({"ok": True, "names": names})

@@ -269,5 +269,7 @@
     // File picker selection → update UI
     fileInput.addEventListener("change", updateUI);
   });
+  window.CAMERA_NAMES = {{ camera_names|safe }};
+
 </script>
 {% endblock %}
