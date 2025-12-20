@@ -17,9 +17,10 @@ urlpatterns = [
     path("photo/<int:pk>/unpublish/", views.unpublish_photo, name="unpublish_photo"),
     # Cameras CRUD
     path("cameras/", views.cameras_list, name="cameras_list"),
-    path("cameras/new/", views.camera_create, name="camera_create"),
-    path("cameras/<int:pk>/edit/", views.camera_edit, name="camera_edit"),
-    path("cameras/suggest/", views.cameras_suggest, name="cameras_suggest"),
+
+    # JSON endpoints for modal save
+    path("camera/create/", views.camera_create, name="camera_create"),
+    path("camera/<int:pk>/update/", views.camera_update, name="camera_update"),
 
 
 

@@ -31,6 +31,8 @@ from .forms import CameraForm
 from .utils.utils import require_researcher
 
 import re
+from decimal import Decimal, InvalidOperation
+
 
 # Home landing page
 def index(request):
@@ -422,53 +424,116 @@ def cameras_list(request):
         "search_query": q,
     })
 
+CAMERA_NAME_RE = re.compile(r"^[A-Z0-9][A-Z0-9\-_]{1,63}$")  # flexible; tighten if you want TRAILCAM##
+# If you want STRICT TRAILCAM## only, use:
+# CAMERA_NAME_RE = re.compile(r"^TRAILCAM\d{2,3}$")
+
+def _validate_camera_payload(data):
+    """
+    Returns (cleaned_dict, errors_dict)
+    """
+    errors = {}
+    cleaned = {}
+
+    name = (data.get("name") or "").strip().upper()
+    if not name:
+        errors["name"] = "Camera name is required."
+    elif not CAMERA_NAME_RE.match(name):
+        errors["name"] = "Use only letters/numbers and - or _. Example: TRAILCAM05"
+    cleaned["name"] = name
+
+    def parse_decimal(field, min_v, max_v, label):
+        raw = (data.get(field) or "").strip()
+        if raw == "":
+            errors[field] = f"{label} is required."
+            return None
+        try:
+            val = Decimal(raw)
+        except (InvalidOperation, ValueError):
+            errors[field] = f"{label} must be a number."
+            return None
+
+        if val < Decimal(str(min_v)) or val > Decimal(str(max_v)):
+            errors[field] = f"{label} must be between {min_v} and {max_v}."
+            return None
+        return val
+
+    lat = parse_decimal("base_latitude", -90, 90, "Latitude")
+    lon = parse_decimal("base_longitude", -180, 180, "Longitude")
+    if lat is not None:
+        cleaned["base_latitude"] = lat
+    if lon is not None:
+        cleaned["base_longitude"] = lon
+
+    desc = (data.get("description") or "").strip()
+    if len(desc) > 255:
+        errors["description"] = "Description must be 255 characters or fewer."
+    cleaned["description"] = desc
+
+    is_active_raw = (data.get("is_active") or "").strip().lower()
+    # checkbox sends "on" sometimes; our JS will send "true/false"
+    cleaned["is_active"] = (is_active_raw in ("1", "true", "on", "yes"))
+
+    return cleaned, errors
+
+
 @login_required
+@require_POST
 def camera_create(request):
     require_researcher(request.user)
 
-    if request.method == "POST":
-        form = CameraForm(request.POST)
-        if form.is_valid():
-            cam = form.save()
-            messages.success(request, f"Camera '{cam.name}' created.")
-            return redirect("wildlife:cameras_list")
-    else:
-        form = CameraForm()
+    cleaned, errors = _validate_camera_payload(request.POST)
+    if errors:
+        return JsonResponse({"ok": False, "errors": errors}, status=400)
 
-    return render(request, "wildlife/camera_form.html", {
-        "form": form,
-        "mode": "create",
-    })        
+    # unique name check
+    if Camera.objects.filter(name=cleaned["name"]).exists():
+        return JsonResponse({"ok": False, "errors": {"name": "That camera name already exists."}}, status=400)
 
-# camera edit view
-@login_required
-def camera_edit(request, pk):
-    require_researcher(request.user)
-    cam = get_object_or_404(Camera, pk=pk)
+    cam = Camera.objects.create(**cleaned)
 
-    if request.method == "POST":
-        form = CameraForm(request.POST, instance=cam)
-        if form.is_valid():
-            cam = form.save()
-            messages.success(request, f"Camera '{cam.name}' updated.")
-            return redirect("wildlife:cameras_list")
-    else:
-        form = CameraForm(instance=cam)
-
-    return render(request, "wildlife/camera_form.html", {
-        "form": form,
-        "mode": "edit",
-        "camera": cam,
+    return JsonResponse({
+        "ok": True,
+        "camera": {
+            "id": cam.id,
+            "name": cam.name,
+            "base_latitude": str(cam.base_latitude),
+            "base_longitude": str(cam.base_longitude),
+            "description": cam.description or "",
+            "is_active": cam.is_active,
+        }
     })
 
-# autocomplete endpoint for camera names
+
 @login_required
-def cameras_suggest(request):
+@require_POST
+def camera_update(request, pk):
     require_researcher(request.user)
 
-    q = (request.GET.get("q") or "").strip().upper()
-    qs = Camera.objects.filter(is_active=True).order_by("name")
-    if q:
-        qs = qs.filter(name__startswith=q)
-    names = list(qs.values_list("name", flat=True)[:50])
-    return JsonResponse({"ok": True, "names": names})
+    cam = get_object_or_404(Camera, pk=pk)
+    cleaned, errors = _validate_camera_payload(request.POST)
+    if errors:
+        return JsonResponse({"ok": False, "errors": errors}, status=400)
+
+    # unique name check excluding self
+    if Camera.objects.filter(name=cleaned["name"]).exclude(pk=cam.pk).exists():
+        return JsonResponse({"ok": False, "errors": {"name": "That camera name already exists."}}, status=400)
+
+    cam.name = cleaned["name"]
+    cam.base_latitude = cleaned["base_latitude"]
+    cam.base_longitude = cleaned["base_longitude"]
+    cam.description = cleaned["description"]
+    cam.is_active = cleaned["is_active"]
+    cam.save()
+
+    return JsonResponse({
+        "ok": True,
+        "camera": {
+            "id": cam.id,
+            "name": cam.name,
+            "base_latitude": str(cam.base_latitude),
+            "base_longitude": str(cam.base_longitude),
+            "description": cam.description or "",
+            "is_active": cam.is_active,
+        }
+    })

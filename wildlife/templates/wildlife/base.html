@@ -37,8 +37,8 @@
     {% block content %}{% endblock %}
   </main>
 
-  <!-- ✅ Single modal (hidden by default) -->
-  <div id="cardModal" class="modal-backdrop" aria-hidden="true" style="display:none;">
+  <!-- ✅ Single shared modal for photos + cameras -->
+  <div id="cardModal" class="modal-backdrop" aria-hidden="true">
     <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
       <button id="modalCloseBtn" class="modal-close" type="button" aria-label="Close">×</button>
 
@@ -50,197 +50,246 @@
   </div>
 
   <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      const modal = document.getElementById("cardModal");
-      const modalContent = document.getElementById("cardModalContent");
-      const closeBtn = document.getElementById("modalCloseBtn");
-      const toast = document.getElementById("modalToast");
+  document.addEventListener("DOMContentLoaded", () => {
+    const modal = document.getElementById("cardModal");
+    const modalContent = document.getElementById("cardModalContent");
+    const closeBtn = document.getElementById("modalCloseBtn");
+    const toast = document.getElementById("modalToast");
 
-      function getCSRFToken() {
-        const name = "csrftoken=";
-        return document.cookie.split(";").map(s => s.trim())
-          .find(s => s.startsWith(name))?.slice(name.length) || "";
+    if (!modal || !modalContent || !closeBtn) {
+      console.error("Modal elements missing (#cardModal, #cardModalContent, #modalCloseBtn)");
+      return;
+    }
+
+    let lastFocusedEl = null;
+
+    function getCSRFToken() {
+      const name = "csrftoken=";
+      return document.cookie.split(";").map(s => s.trim())
+        .find(s => s.startsWith(name))?.slice(name.length) || "";
+    }
+
+    function showToast(msg) {
+      if (!toast) return;
+      toast.textContent = msg;
+      toast.classList.add("is-showing");
+      window.clearTimeout(showToast._t);
+      showToast._t = window.setTimeout(() => toast.classList.remove("is-showing"), 1200);
+    }
+
+    function openModal() {
+      lastFocusedEl = document.activeElement;
+
+      modal.classList.add("is-open");
+      modal.setAttribute("aria-hidden", "false");
+
+      // Move focus inside modal for accessibility
+      closeBtn.focus();
+    }
+
+    function closeModal() {
+      // Move focus OUT before aria-hidden (prevents the browser warning)
+      if (modal.contains(document.activeElement)) {
+        document.activeElement.blur();
+        if (lastFocusedEl && typeof lastFocusedEl.focus === "function") {
+          lastFocusedEl.focus();
+        }
       }
 
-      function showToast(msg) {
-        toast.textContent = msg;
-        toast.classList.add("is-showing");
-        window.clearTimeout(showToast._t);
-        showToast._t = window.setTimeout(() => toast.classList.remove("is-showing"), 1200);
-      }
+      modal.classList.remove("is-open");
+      modal.setAttribute("aria-hidden", "true");
+      modalContent.innerHTML = "";
+    }
 
-      function openModal() {
-        modal.style.display = "flex";
-        modal.setAttribute("aria-hidden", "false");
-      }
+    closeBtn.addEventListener("click", closeModal);
 
-      function closeModal() {
-        modal.style.display = "none";
-        modal.setAttribute("aria-hidden", "true");
-        modalContent.innerHTML = "";
-      }
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeModal();
+    });
 
-      closeBtn.addEventListener("click", closeModal);
-      modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
-      document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape" && modal.style.display !== "none") closeModal();
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && modal.classList.contains("is-open")) closeModal();
+    });
+
+    // ✅ One global modal API (photos + cameras use this)
+    window.AppModal = {
+      openWithHTML(html) {
+        modalContent.innerHTML = html;
+        openModal();
+      },
+      setContent(html) {
+        modalContent.innerHTML = html;
+      },
+      open: openModal,
+      close: closeModal,
+      toast: showToast,
+      csrf: getCSRFToken,
+      el: modal,
+      contentEl: modalContent,
+    };
+
+    // ===========================
+    // Photo modal: enabled only on /upload
+    // ===========================
+    function renderPhotoModalFromCard(card) {
+      const M = window.AppModal;
+      const id = card.dataset.photoId;
+      const img = card.querySelector("img")?.getAttribute("src") || "";
+      const title = card.querySelector(".photo-title")?.textContent?.trim() || "Photo";
+
+      const camera = card.dataset.camera || "";
+      const date = card.dataset.date || "";
+      const time = card.dataset.time || "";
+      const temp = card.dataset.temp || "";
+      const press = card.dataset.press || "";
+
+      const cameraOptions = (window.CAMERA_NAMES || [])
+        .map(n => `<option value="${n}"></option>`).join("");
+
+      const html = `
+        <h2 id="modalTitle" class="modal-title">${title}</h2>
+
+        <div class="modal-grid">
+          <div>
+            <img class="modal-image" src="${img}" alt="photo ${id}">
+          </div>
+
+          <div>
+            <datalist id="cameraOptions">${cameraOptions}</datalist>
+
+            <form class="meta-form" id="metaForm">
+              <div class="meta-error" id="metaError" style="display:none;"></div>
+
+              <label>Camera (TRAILCAMXX)</label>
+              <input name="camera_name" type="text" list="cameraOptions"
+                     value="${camera}" placeholder="TRAILCAM05" autocomplete="off">
+
+              <label>Date</label>
+              <input name="date_taken" type="date" value="${date}">
+
+              <label>Time</label>
+              <input name="time_taken" type="time" value="${time}">
+
+              <label>Temperature (°C)</label>
+              <input name="temperature" type="number" step="0.1" min="-60" max="80"
+                     value="${temp}" placeholder="e.g. 23.0">
+
+              <label>Pressure (inHg)</label>
+              <input name="pressure" type="number" step="0.01" min="20" max="35"
+                     value="${press}" placeholder="e.g. 29.09">
+
+              <div class="meta-row-actions">
+                <button id="saveBtn" class="btn btn-primary" type="button" style="display:none;">Save</button>
+                <button id="deleteBtn" class="btn" type="button">Delete</button>
+              </div>
+            </form>
+
+            <form id="deleteForm" method="post" action="/photo/${id}/delete-staging/" style="display:none;">
+              <input type="hidden" name="csrfmiddlewaretoken" value="${M.csrf()}">
+            </form>
+          </div>
+        </div>
+      `;
+
+      M.openWithHTML(html);
+
+      const form = M.contentEl.querySelector("#metaForm");
+      const saveBtn = M.contentEl.querySelector("#saveBtn");
+      const errBox = M.contentEl.querySelector("#metaError");
+      const deleteBtn = M.contentEl.querySelector("#deleteBtn");
+      const deleteForm = M.contentEl.querySelector("#deleteForm");
+
+      const baseline = Object.fromEntries(new FormData(form).entries());
+
+      function setError(msg) {
+        errBox.textContent = msg || "";
+        errBox.style.display = msg ? "block" : "none";
+      }
+      setError("");
+
+      // normalize camera input
+      form.querySelector('input[name="camera_name"]').addEventListener("input", (e) => {
+        e.target.value = e.target.value.toUpperCase().replace(/\s+/g, "");
       });
 
-      function renderModalFromCard(card) {
-        const id = card.dataset.photoId;
-        const img = card.querySelector("img")?.getAttribute("src") || "";
-        const title = card.querySelector(".photo-title")?.textContent?.trim() || "Photo";
+      // show save when dirty
+      form.addEventListener("input", () => {
+        const now = Object.fromEntries(new FormData(form).entries());
+        const dirty = Object.keys(now).some(k => (now[k] || "") !== (baseline[k] || ""));
+        saveBtn.style.display = dirty ? "inline-block" : "none";
+        setError("");
+      });
 
-        const camera = card.dataset.camera || "";
-        const date = card.dataset.date || "";
-        const time = card.dataset.time || "";
-        const temp = card.dataset.temp || "";
-        const press = card.dataset.press || "";
-
-        const cameraOptions = (window.CAMERA_NAMES || [])
-          .map(n => `<option value="${n}"></option>`).join("");
-
-        // IMPORTANT: no nested forms
-        modalContent.innerHTML = `
-          <h2 id="modalTitle" class="modal-title">${title}</h2>
-
-          <div class="modal-grid">
-            <div>
-              <img class="modal-image" src="${img}" alt="photo ${id}">
-            </div>
-
-            <div>
-              <datalist id="cameraOptions">${cameraOptions}</datalist>
-
-              <form class="meta-form" id="metaForm">
-                <div class="meta-error" id="metaError" style="display:none;"></div>
-
-                <label>Camera (TRAILCAMXX)</label>
-                <input name="camera_name" type="text" list="cameraOptions"
-                       value="${camera}" placeholder="TRAILCAM05" autocomplete="off">
-
-                <label>Date</label>
-                <input name="date_taken" type="date" value="${date}">
-
-                <label>Time</label>
-                <input name="time_taken" type="time" value="${time}">
-
-                <label>Temperature (°C)</label>
-                <input name="temperature" type="number" step="0.1" min="-60" max="80"
-                       value="${temp}" placeholder="e.g. 23.0">
-
-                <label>Pressure (inHg)</label>
-                <input name="pressure" type="number" step="0.01" min="20" max="35"
-                       value="${press}" placeholder="e.g. 29.09">
-
-                <div class="meta-row-actions">
-                  <button id="saveBtn" class="btn btn-primary" type="button" style="display:none;">Save</button>
-
-                  <button id="deleteBtn" class="btn" type="button">Delete</button>
-                </div>
-              </form>
-
-              <!-- separate delete form (NOT inside metaForm) -->
-              <form id="deleteForm" method="post" action="/photo/${id}/delete-staging/" style="display:none;">
-                <input type="hidden" name="csrfmiddlewaretoken" value="${getCSRFToken()}">
-              </form>
-            </div>
-          </div>
-        `;
-
-        const form = modalContent.querySelector("#metaForm");
-        const saveBtn = modalContent.querySelector("#saveBtn");
-        const errBox = modalContent.querySelector("#metaError");
-        const deleteBtn = modalContent.querySelector("#deleteBtn");
-        const deleteForm = modalContent.querySelector("#deleteForm");
-
-        const baseline = Object.fromEntries(new FormData(form).entries());
-
-        function setError(msg) {
-          errBox.textContent = msg || "";
-          errBox.style.display = msg ? "block" : "none";
+      deleteBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (confirm("Delete this unpublished photo? This cannot be undone.")) {
+          deleteForm.submit();
         }
+      });
+
+      saveBtn.addEventListener("click", async () => {
+        saveBtn.disabled = true;
         setError("");
 
-        // normalize camera typing
-        form.querySelector('input[name="camera_name"]').addEventListener("input", (e) => {
-          e.target.value = e.target.value.toUpperCase().replace(/\s+/g, "");
-        });
+        try {
+          const payload = new URLSearchParams();
+          for (const [k, v] of new FormData(form).entries()) payload.set(k, v);
 
-        // show save when dirty
-        form.addEventListener("input", () => {
-          const now = Object.fromEntries(new FormData(form).entries());
-          const dirty = Object.keys(now).some(k => (now[k] || "") !== (baseline[k] || ""));
-          saveBtn.style.display = dirty ? "inline-block" : "none";
-          setError("");
-        });
+          const res = await fetch(`/photo/${id}/meta/update/`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              "X-CSRFToken": M.csrf(),
+            },
+            body: payload.toString(),
+          });
 
-        deleteBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (confirm("Delete this unpublished photo? This cannot be undone.")) {
-            deleteForm.submit();
+          const data = await res.json();
+          if (!data.ok) {
+            const msg = data.errors
+              ? Object.entries(data.errors).map(([k, v]) => `${k}: ${v}`).join("\n")
+              : (data.error || "Save failed.");
+            setError(msg);
+            return;
           }
-        });
 
-        saveBtn.addEventListener("click", async () => {
-          saveBtn.disabled = true;
-          setError("");
-
-          try {
-            const payload = new URLSearchParams();
-            for (const [k, v] of new FormData(form).entries()) payload.set(k, v);
-
-            const res = await fetch(`/photo/${id}/meta/update/`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-                "X-CSRFToken": getCSRFToken(),
-              },
-              body: payload.toString(),
-            });
-
-            const data = await res.json();
-
-            if (!data.ok) {
-              const msg = data.errors
-                ? Object.entries(data.errors).map(([k, v]) => `${k}: ${v}`).join("\n")
-                : (data.error || "Save failed.");
-              setError(msg);
-              return;
-            }
-
-            // sync card dataset
-            const updated = data.photo;
-            const pageCard = document.querySelector(`.photo-card[data-photo-id="${id}"]`);
-            if (pageCard) {
-              pageCard.dataset.camera = updated.camera_name || "";
-              pageCard.dataset.date = updated.date_taken || "";
-              pageCard.dataset.time = updated.time_taken || "";
-              pageCard.dataset.temp = updated.temperature || "";
-              pageCard.dataset.press = updated.pressure || "";
-            }
-
-            showToast("Saved ✓");
-            setTimeout(closeModal, 450);
-
-          } catch (e) {
-            setError("Save failed. Check server logs.");
-          } finally {
-            saveBtn.disabled = false;
+          // sync dataset on the card so UI stays consistent
+          const updated = data.photo;
+          const pageCard = document.querySelector(`.photo-card[data-photo-id="${id}"]`);
+          if (pageCard) {
+            pageCard.dataset.camera = updated.camera_name || "";
+            pageCard.dataset.date = updated.date_taken || "";
+            pageCard.dataset.time = updated.time_taken || "";
+            pageCard.dataset.temp = updated.temperature || "";
+            pageCard.dataset.press = updated.pressure || "";
           }
-        });
 
-        openModal();
-      }
+          M.toast("Saved ✓");
+          setTimeout(() => M.close(), 450);
 
-      document.addEventListener("click", (e) => {
-        const card = e.target.closest(".photo-card.is-clickable");
-        if (!card) return;
-        if (e.target.closest("button, form, a, input, select, textarea")) return;
-        if (!location.pathname.startsWith("/upload")) return;
-        renderModalFromCard(card);
+        } catch (e) {
+          setError("Save failed. Check server logs.");
+        } finally {
+          saveBtn.disabled = false;
+        }
       });
+    }
+
+    // Click photo card -> open modal (only on /upload)
+    document.addEventListener("click", (e) => {
+      const card = e.target.closest(".photo-card.is-clickable");
+      if (!card) return;
+
+      // Don't open if they clicked inside buttons/forms/inputs
+      if (e.target.closest("button, form, a, input, select, textarea")) return;
+
+      if (!location.pathname.startsWith("/upload")) return;
+
+      renderPhotoModalFromCard(card);
     });
+  });
   </script>
+
+  {% block extra_scripts %}{% endblock %}
 </body>
 </html>
