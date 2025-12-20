@@ -1,8 +1,3 @@
-# django-trailcam-animal-tracker
-
-
----
-
 # 🦌 Trailcam Wildlife Research Platform
 
 A collaborative Django-based platform for **uploading, analyzing, staging, and publishing trail camera images** for wildlife research.
