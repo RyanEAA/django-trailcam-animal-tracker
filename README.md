@@ -25,6 +25,8 @@ This project is designed to support **teams of researchers** working together to
   * Edit metadata inline
   * Publish / unpublish images
   * Collaborate in a shared staging area
+  * Manage cameras and locations
+  * Collaborate in a shared staging area
 
 ---
 
@@ -50,15 +52,44 @@ When a researcher clicks **Analyze**, the system:
 1. Crops the bottom overlay of the trailcam image
 2. Applies OCR (Tesseract)
 3. Extracts:
-
    * Camera ID (e.g. `TRAILCAM05`)
    * Date
    * Time
    * Temperature (°C)
    * Pressure (inHg)
-4. Saves parsed metadata to the database
+4. Normalizes common OCR errors:
+   * 0, Q, D -> 0 in a camera number
+5. Automatically Attaches Camera if it exists
+5. Saves parsed metadata to the database
 
 Researchers can then **review and edit** extracted values before publishing.
+
+---
+
+### 📷 Camera Management (CRUD)
+
+Researchers can manage cameras via the Cameras page.
+
+**Camera Model**
+
+Each camera includes:
+    * name (unique, e.g. TRAILCAM05)
+    * base_latitude
+    * base_longitude
+    * description (optional)
+    * is_active
+
+**Camera Actions**
+    * Create cameras via modal
+    * Edit camera metadata via modal
+    * Activate / deactivate cameras
+    * Search cameras by name or description
+
+**OCR Integration**
+    * OCR-extracted camera IDs are normalized (e.g. TRAILCAMQ5 → TRAILCAM05)
+    * If a matching active camera exists, it is automatically linked
+    * If not, researchers are prompted to create the camera first
+    * This ensures consistent camera IDs and location metadata across the dataset.
 
 ---
 
@@ -67,7 +98,7 @@ Researchers can then **review and edit** extracted values before publishing.
 * Clicking a photo card opens a **modal editor**
 * Metadata fields use appropriate controls:
 
-  * Camera → text input (normalized)
+  * Camera → text input with suggestions
   * Date → date picker
   * Time → time picker
   * Temperature / Pressure → numeric inputs with validation
@@ -195,17 +226,6 @@ python manage.py runserver
 
 ---
 
-## 🧭 Future Enhancements
-
-* Automated animal classification (CV model)
-* Batch analysis
-* Per-field confidence scores
-* Researcher activity logs
-* Dataset export tooling
-* Deployment (Docker / cloud)
-
----
-
 ## 📜 License
 
 This project is intended for **academic and research use**.
@@ -225,41 +245,60 @@ subgraph Researcher
   R1([Log in])
   R2[Upload trailcam images]
   R3[View shared staging area]
-  R4[Click Analyze]
-  R5[Review & edit metadata modal-view]
-  R6{Publish or Delete?}
-  R7[Publish image]
-  R8[Delete image]
-  R9[View public gallery]
-  R10[Unpublish image]
+  R4[Open photo modal]
+  R5[Click Analyze]
+  R6[Review and edit metadata in modal]
+  R7{Publish or Delete?}
+  R8[Publish image]
+  R9[Delete image]
+  R10[View public gallery]
+  R11[Unpublish image]
+
+  RC1[Open Cameras page]
+  RC2[Create new camera]
+  RC3[Edit camera]
+  RC4[Save camera]
+  RC5[Activate or deactivate camera]
 end
 
 subgraph System
   S1[Receive uploads]
-  S2[Store images in staging]
-  S3[Run OCR to extract metadata]
-  S4[Return extracted metadata]
-  S5[Save edited metadata]
-  S6[Move image to public gallery]
-  S7[Permanently delete image]
-  S8[Return image to staging]
+  S2[Store image in staging]
+  S3[Run OCR on image]
+  S3A[Normalize OCR camera id]
+  S4{Camera exists?}
+  S5[Attach camera to photo]
+  S6[Return metadata to modal]
+  S7[Save edited metadata]
+  S8[Publish image]
+  S9[Delete image permanently]
+  S10[Return image to staging]
+
+  SC1[Validate camera fields]
+  SC2[Create camera record]
+  SC3[Update camera record]
 end
 
 subgraph Public_User
-  P1[Browse public gallery]
-  P2[View image + metadata]
+  P1[Browse gallery]
+  P2[View image and metadata]
 end
 
-%% ========= MAIN FLOW =========
-R1 --> R2 --> S1 --> S2 --> R3 --> R4 --> S3 --> S4 --> R5 --> S5 --> R6
+%% ========= PHOTO FLOW =========
+R1 --> R2 --> S1 --> S2 --> R3 --> R4 --> R5 --> S3 --> S3A --> S4
+S4 -->|Yes| S5 --> S6 --> R6 --> S7 --> R7
+S4 -->|No| S6 --> R6
 
-%% ========= DECISION =========
-R6 -->|Publish| R7 --> S6 --> P1 --> P2
-R6 -->|Delete| R8 --> S7 --> R3
+R7 -->|Publish| R8 --> S8 --> P1 --> P2
+R7 -->|Delete| R9 --> S9 --> R3
 
-%% ========= LOOPS =========
-R5 -->|Re-analyze| R4
-R9 --> R10 --> S8 --> R3
+R10 --> R11 --> S10 --> R3
+
+%% ========= CAMERA FLOW =========
+R1 --> RC1
+RC1 --> RC2 --> SC1 --> SC2 --> RC4
+RC1 --> RC3 --> SC1 --> SC3 --> RC4
+RC1 --> RC5 --> SC3
 ```
 
 ## 🧱 System Architecture Diagram
@@ -365,8 +404,8 @@ V -->|delete media file| MEDIA
 
 ```mermaid
 erDiagram
-  USER ||--o{ PHOTO : "uploads"
-  CAMERA ||--o{ PHOTO : "captures"
+  USER ||--o{ PHOTO : uploads
+  CAMERA ||--o{ PHOTO : captures
 
   USER {
     int id PK
@@ -377,6 +416,10 @@ erDiagram
   CAMERA {
     int id PK
     string name
+    decimal base_latitude
+    decimal base_longitude
+    string description
+    boolean is_active
   }
 
   PHOTO {
@@ -390,5 +433,17 @@ erDiagram
     int camera_id FK
     int uploaded_by_id FK
   }
-
 ```
+
+---
+
+## 🧭 Roadmap (High-Level)
+
+    ✅ Shared staging workflow
+    ✅ Modal-based metadata editing
+    ✅ Camera CRUD + OCR integration
+    🔒 Open-state (lock) enforcement for photos & cameras
+    🐾 Animal detection & classification
+    🗺️ Map-based sightings view
+    📊 Public activity log
+    🚀 Deployment & background processing
