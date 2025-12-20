@@ -16,7 +16,7 @@ from django.db.models import Q
 from django.shortcuts import render
 from .models import Photo, Species, Camera
 
-from wildlife.utils.ocr import crop_bottom_strip, extract_overlay_meta
+from wildlife.utils.ocr import crop_bottom_strip, extract_overlay_meta_split
 import pytesseract
 from PIL import Image
 import os
@@ -191,7 +191,8 @@ def analyze_photo(request, pk):
     
 
     # extract metadata
-    data = extract_overlay_meta(text)
+    data = extract_overlay_meta_split(t_left, t_center, t_right)
+
 
     # set camera
     if data.camera_name and photo.camera is None:
