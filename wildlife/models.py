@@ -1,5 +1,6 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.conf import settings
 
 class User(AbstractUser):
     is_researcher = models.BooleanField(default=False)
@@ -22,6 +23,17 @@ class Camera(models.Model):
     # Optional metadata
     description = models.CharField(max_length=255, blank=True)
     is_active = models.BooleanField(default=True)
+
+    # adding lock for editing
+    opened_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="opened_cameras"
+    )
+
+    opened_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return self.name
@@ -55,6 +67,15 @@ class Photo(models.Model):
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     megadetector_result = models.JSONField(null=True, blank=True)
+
+    opened_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="opened_photos"
+    )
+    opened_at = models.DateTimeField(null=True, blank=True)
 
     def save(self, *args, **kwargs):
         # If a camera is chosen and photo lat/long aren't set, default them from camera base coords
