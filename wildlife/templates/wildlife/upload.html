@@ -65,7 +65,7 @@
 
 <h2>Unpublished Photos</h2>
 <p style="color:#666; margin-bottom:10px;">
-  Click a card to open and edit metadata. Analyze before publishing.
+  Use the Edit button on each card to open a full-page editor. Analyze before publishing.
 </p>
 
 {% if recent_photos %}
@@ -73,6 +73,7 @@
     {% for photo in recent_photos %}
       <div class="photo-card is-clickable"
            data-photo-id="{{ photo.id }}"
+           data-edit-url="{% url 'wildlife:photo_edit' photo.id %}"
            data-camera="{{ photo.camera.name|default:'' }}"
            data-date="{{ photo.date_taken|date:'Y-m-d'|default:'' }}"
            data-time="{% if photo.time_taken %}{{ photo.time_taken|time:'H:i' }}{% endif %}"
@@ -141,14 +142,7 @@
         </div>
 
         <div class="card-actions">
-          <!-- Analyze -->
-          <form method="post"
-                action="{% url 'wildlife:analyze_photo' photo.id %}">
-            {% csrf_token %}
-            <button class="btn" type="submit">
-              Analyze
-            </button>
-          </form>
+          <!-- Card click navigates to edit page; explicit Edit button removed -->
 
           <!-- Publish -->
           {% if photo.date_taken and photo.time_taken and photo.temperature is not None and photo.pressure is not None %}

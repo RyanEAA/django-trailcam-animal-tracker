@@ -15,7 +15,7 @@
     <button class="btn" type="submit">Search</button>
   </form>
 
-  <button id="newCameraBtn" class="btn btn-primary" type="button">+ New Camera</button>
+  <a href="{% url 'wildlife:camera_new' %}" id="newCameraBtn" class="btn btn-primary">+ New Camera</a>
 </div>
 
 {% if cameras %}
@@ -23,6 +23,7 @@
     {% for cam in cameras %}
       <div class="photo-card is-clickable camera-card"
            data-camera-id="{{ cam.id }}"
+           data-edit-url="{% url 'wildlife:camera_edit' cam.id %}"
            data-name="{{ cam.name }}"
            data-lat="{{ cam.base_latitude }}"
            data-lon="{{ cam.base_longitude }}"
@@ -41,7 +42,7 @@
         </div>
 
         <div class="card-actions">
-          <button class="btn js-edit-camera" type="button">Edit</button>
+          <!-- Card click navigates to edit page; explicit Edit button removed -->
         </div>
       </div>
     {% endfor %}
@@ -52,232 +53,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const M = window.AppModal;
-  if (!M) {
-    console.error("AppModal missing. Make sure base.html script is loaded.");
-    return;
-  }
-
-  const newBtn = document.getElementById("newCameraBtn");
-
-  function setError(errBox, msg) {
-    errBox.textContent = msg || "";
-    errBox.style.display = msg ? "block" : "none";
-  }
-
-  function escAttr(s) {
-    return (s ?? "").toString().replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-  }
-
-  function renderCameraModal({ mode, cam }) {
-    const isEdit = mode === "edit";
-    const id = cam?.id || "";
-    const name = cam?.name || "";
-    const lat = cam?.lat || "";
-    const lon = cam?.lon || "";
-    const desc = cam?.desc || "";
-    const active = cam?.active ?? true;
-
-    const html = `
-      <h2 id="modalTitle" class="modal-title">${isEdit ? "Edit Camera" : "New Camera"}</h2>
-
-      <div class="modal-grid" style="grid-template-columns: 1fr; max-width:720px;">
-        <div>
-          <form class="meta-form" id="cameraForm">
-            <div class="meta-error" id="camError" style="display:none;"></div>
-
-            <label>Name</label>
-            <input name="name" type="text" value="${escAttr(name)}"
-                   placeholder="TRAILCAM05" autocomplete="off" required maxlength="64">
-
-            <label>Latitude</label>
-            <input name="base_latitude" type="number" step="0.000001" min="-90" max="90"
-                   value="${escAttr(lat)}" placeholder="e.g. 30.229640" required>
-
-            <label>Longitude</label>
-            <input name="base_longitude" type="number" step="0.000001" min="-180" max="180"
-                   value="${escAttr(lon)}" placeholder="e.g. -97.755020" required>
-
-            <label>Description (optional)</label>
-            <input name="description" type="text" value="${escAttr(desc)}"
-                   maxlength="255" placeholder="Near creek crossing">
-
-            <label style="display:flex; gap:10px; align-items:center; margin-top:12px;">
-              <input name="is_active" type="checkbox" ${active ? "checked" : ""} style="width:auto;">
-              Active
-            </label>
-
-            <div class="meta-row-actions">
-              <button id="camSaveBtn" class="btn btn-primary" type="button" style="display:none;">Save</button>
-              <button class="btn" type="button" id="camCancelBtn">Cancel</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    `;
-
-    M.openWithHTML(html);
-
-    const form = M.contentEl.querySelector("#cameraForm");
-    const errBox = M.contentEl.querySelector("#camError");
-    const saveBtn = M.contentEl.querySelector("#camSaveBtn");
-    const cancelBtn = M.contentEl.querySelector("#camCancelBtn");
-
-    setError(errBox, "");
-
-    // normalize name
-    form.querySelector('input[name="name"]').addEventListener("input", (e) => {
-      e.target.value = e.target.value.toUpperCase().replace(/\s+/g, "");
-    });
-
-    // baseline for dirty check
-    const baseline = Object.fromEntries(new FormData(form).entries());
-    baseline.is_active = form.querySelector('input[name="is_active"]').checked ? "true" : "false";
-
-    function currentState() {
-      const now = Object.fromEntries(new FormData(form).entries());
-      now.is_active = form.querySelector('input[name="is_active"]').checked ? "true" : "false";
-      return now;
-    }
-
-    function isDirty() {
-      const now = currentState();
-      return Object.keys(baseline).some(k => (now[k] || "") !== (baseline[k] || ""));
-    }
-
-    form.addEventListener("input", () => {
-      saveBtn.style.display = isDirty() ? "inline-block" : "none";
-      setError(errBox, "");
-    });
-
-    cancelBtn.addEventListener("click", () => M.close());
-
-    async function save() {
-      setError(errBox, "");
-      saveBtn.disabled = true;
-
-      const nameVal = form.querySelector('input[name="name"]').value.trim();
-      const latVal = form.querySelector('input[name="base_latitude"]').value.trim();
-      const lonVal = form.querySelector('input[name="base_longitude"]').value.trim();
-
-      if (!nameVal) { setError(errBox, "Name is required."); saveBtn.disabled = false; return; }
-      if (latVal === "" || lonVal === "") { setError(errBox, "Latitude and longitude are required."); saveBtn.disabled = false; return; }
-
-      try {
-        const payload = new URLSearchParams();
-        payload.set("name", nameVal);
-        payload.set("base_latitude", latVal);
-        payload.set("base_longitude", lonVal);
-        payload.set("description", form.querySelector('input[name="description"]').value || "");
-        payload.set("is_active", form.querySelector('input[name="is_active"]').checked ? "true" : "false");
-
-        const url = isEdit ? `/camera/${id}/update/` : `/camera/create/`;
-        const res = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "X-CSRFToken": M.csrf(),
-          },
-          body: payload.toString(),
-        });
-
-        const data = await res.json();
-        if (!data.ok) {
-          const msg = data.errors
-            ? Object.entries(data.errors).map(([k,v]) => `${k}: ${v}`).join("\n")
-            : (data.error || "Save failed.");
-          setError(errBox, msg);
-          return;
-        }
-
-        const camOut = data.camera;
-
-        // Update card in-place if editing
-        if (isEdit) {
-          const card = document.querySelector(`.camera-card[data-camera-id="${camOut.id}"]`);
-          if (card) {
-            card.dataset.name = camOut.name;
-            card.dataset.lat = camOut.base_latitude;
-            card.dataset.lon = camOut.base_longitude;
-            card.dataset.desc = camOut.description || "";
-            card.dataset.active = camOut.is_active ? "true" : "false";
-
-            card.querySelector(".photo-title").textContent = camOut.name;
-            card.querySelector('[data-field="lat"]').textContent = camOut.base_latitude;
-            card.querySelector('[data-field="lon"]').textContent = camOut.base_longitude;
-            card.querySelector('[data-field="desc"]').textContent = camOut.description || "—";
-            card.querySelector('[data-field="active"]').textContent = camOut.is_active ? "Active" : "Inactive";
-          }
-        } else {
-          // simplest + reliable for create: reload so new card appears in correct sort position
-          M.toast("Saved ✓");
-          setTimeout(() => location.reload(), 350);
-          return;
-        }
-
-        M.toast("Saved ✓");
-        setTimeout(() => M.close(), 450);
-
-      } catch (e) {
-        setError(errBox, "Save failed. Check server logs.");
-      } finally {
-        saveBtn.disabled = false;
-      }
-    }
-
-    saveBtn.addEventListener("click", save);
-  }
-
-  // New camera
-  newBtn?.addEventListener("click", () => {
-    renderCameraModal({
-      mode: "create",
-      cam: { active: true }
-    });
-  });
-
-  // Edit button explicitly opens modal (best UX)
-  document.addEventListener("click", (e) => {
-    const editBtn = e.target.closest(".js-edit-camera");
-    if (!editBtn) return;
-
-    const card = editBtn.closest(".camera-card");
-    if (!card) return;
-
-    renderCameraModal({
-      mode: "edit",
-      cam: {
-        id: card.dataset.cameraId,
-        name: card.dataset.name || "",
-        lat: card.dataset.lat || "",
-        lon: card.dataset.lon || "",
-        desc: card.dataset.desc || "",
-        active: (card.dataset.active === "true"),
-      }
-    });
-  });
-
-  // Optional: clicking the card (not buttons) also edits
-  document.addEventListener("click", (e) => {
-    const card = e.target.closest(".camera-card.is-clickable");
-    if (!card) return;
-
-    if (e.target.closest("button, a, input, select, textarea, form")) return;
-
-    renderCameraModal({
-      mode: "edit",
-      cam: {
-        id: card.dataset.cameraId,
-        name: card.dataset.name || "",
-        lat: card.dataset.lat || "",
-        lon: card.dataset.lon || "",
-        desc: card.dataset.desc || "",
-        active: (card.dataset.active === "true"),
-      }
-    });
-  });
-});
-</script>
+<!-- Camera modal-based JS removed: camera create/edit now use dedicated pages. -->
 {% endblock %}

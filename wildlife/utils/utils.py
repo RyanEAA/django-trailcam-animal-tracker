@@ -1,25 +1,32 @@
 from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 
-LOCK_TTL_SECONDS = 60
+LOCK_TTL_SECONDS = 30  # 30s lock
 
 def require_researcher(user):
     if not user.is_authenticated or not getattr(user, "is_researcher", False):
         raise PermissionDenied("Researcher permissions required.")
     
+
 def _lock_is_active(opened_at):
     if not opened_at:
         return False
     return opened_at >= timezone.now() - timezone.timedelta(seconds=LOCK_TTL_SECONDS)
 
+
 def _lock_status(obj):
     """
     Returns a lock payload the frontend can display.
+    Expects:
+      - obj.opened_by (User FK or None)
+      - obj.opened_at (datetime or None)
     """
     if obj.opened_by_id and _lock_is_active(obj.opened_at):
         expires_in = max(
             0,
-            int((obj.opened_at + timezone.timedelta(seconds=LOCK_TTL_SECONDS) - timezone.now()).total_seconds())
+            int(
+                (obj.opened_at + timezone.timedelta(seconds=LOCK_TTL_SECONDS) - timezone.now()).total_seconds()
+            )
         )
         return {
             "active": True,
@@ -36,6 +43,7 @@ def _lock_status(obj):
         "ttl_seconds": 0,
         "is_mine": False,
     }
+
 
 def _require_my_lock(obj, user):
     """
