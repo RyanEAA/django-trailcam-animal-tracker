@@ -97,12 +97,25 @@ class Photo(models.Model):
         return f"{label} ({self.pk})"
 
 class PhotoDetection(models.Model):
+    CATEGORY_CHOICES = [
+        (1, "Animal"),
+        (2, "Person"),
+        (3, "Vehicle"),
+    ]
     photo = models.ForeignKey(Photo, related_name="detections", on_delete=models.CASCADE)
     species = models.ForeignKey(Species, null=True, blank=True, on_delete=models.SET_NULL)
 
+    # MegaDetector category
+    category = models.CharField(
+        max_length=1,
+        choices=CATEGORY_CHOICES,
+        null=True,
+        blank=True,
+        help_text="Detection category (1=Animal, 2=Person, 3=Vehicle)",
+    )
+
     # useful for AI + later editing
-    confidence = models.DecimalField(max_digits=5, decimal_places=4, null=True, blank=True)  # 0-1
-    count = models.PositiveIntegerField(default=1)
+    confidence = models.FloatField(default=0.0)
 
     # optional bounding box (normalized 0..1)
     x = models.DecimalField(max_digits=7, decimal_places=6, null=True, blank=True)
@@ -110,5 +123,14 @@ class PhotoDetection(models.Model):
     w = models.DecimalField(max_digits=7, decimal_places=6, null=True, blank=True)
     h = models.DecimalField(max_digits=7, decimal_places=6, null=True, blank=True)
 
-    source = models.CharField(max_length=32, default="ai")  # ai | human
+    source = models.CharField(max_length=50, default="megadetector")  # ai | human
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def is_animal(self):
+        return self.category == "1"
+    
+    def is_person(self):
+        return self.category == "2"
+    
+    def is_vehicle(self):
+        return self.category == "3"

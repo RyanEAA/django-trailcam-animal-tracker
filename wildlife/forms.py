@@ -34,7 +34,7 @@ class PhotoEditForm(forms.ModelForm):
 class PhotoDetectionForm(forms.ModelForm):
     class Meta:
         model = PhotoDetection
-        fields = ["species", "count", "confidence", "source"]
+        fields = ["species", "confidence", "source"]
 
 
 class CameraForm(forms.ModelForm):

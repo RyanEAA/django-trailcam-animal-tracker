@@ -5,16 +5,20 @@
 {% block content %}
   <h1>Edit Photo</h1>
 
-  
-
   <div style="display:flex; gap:20px; align-items:flex-start;">
+
+    <!-- LEFT COLUMN: IMAGE -->
     <div>
       {% if photo.image %}
-        <img src="{{ photo.image.url }}" alt="photo {{ photo.id }}" style="max-width:560px; border-radius:8px;">
+        <img src="{{ photo.image.url }}" alt="photo {{ photo.id }}"
+             style="max-width:560px; border-radius:8px;">
       {% endif %}
     </div>
 
+    <!-- RIGHT COLUMN: FORM + ACTIONS + AI SUMMARY -->
     <div style="flex:1;">
+
+      <!-- PHOTO EDIT FORM -->
       <form method="post">
         {% csrf_token %}
         <table>
@@ -25,25 +29,55 @@
           <button class="btn btn-primary" type="submit">Save</button>
         </div>
       </form>
+
+      <!-- ACTION BUTTONS -->
       <div style="margin-top:18px; display:flex; gap:8px; align-items:center;">
-        <form method="post" action="{% url 'wildlife:analyze_photo' photo.id %}" style="display:inline;">
+        <form method="post" action="{% url 'wildlife:analyze_photo' photo.id %}">
           {% csrf_token %}
-          <button class="btn" type="submit">Analyze (OCR)</button>
+          <button class="btn" type="submit">Analyze (OCR + AI)</button>
         </form>
 
         {% if photo.date_taken and photo.time_taken and photo.temperature is not None and photo.pressure is not None %}
-          <form method="post" action="{% url 'wildlife:publish_photo' photo.id %}" style="display:inline;">
+          <form method="post" action="{% url 'wildlife:publish_photo' photo.id %}">
             {% csrf_token %}
             <button class="btn btn-primary" type="submit">Publish</button>
           </form>
         {% endif %}
 
-        <form method="post" action="{% url 'wildlife:delete_photo_staging' photo.id %}" style="display:inline;">
+        <form method="post" action="{% url 'wildlife:delete_photo_staging' photo.id %}">
           {% csrf_token %}
-          <button class="btn" type="submit" onclick="return confirm('Delete this unpublished photo? This cannot be undone.');">Delete</button>
+          <button class="btn"
+                  type="submit"
+                  onclick="return confirm('Delete this unpublished photo? This cannot be undone.');">
+            Delete
+          </button>
         </form>
       </div>
+
+      <!-- AI DETECTION SUMMARY -->
+      <div style="margin-top:20px;">
+        {% if has_detections %}
+          <p><strong>AI detections:</strong>
+            {% if num_animals %}
+              {{ num_animals }} animal{% if num_animals != 1 %}s{% endif %}
+            {% endif %}
+
+            {% if num_people %}
+              {% if num_animals %}, {% endif %}
+              {{ num_people }} person{% if num_people != 1 %}s{% endif %}
+            {% endif %}
+
+            {% if num_vehicles %}
+              {% if num_animals or num_people %}, {% endif %}
+              {{ num_vehicles }} vehicle{% if num_vehicles != 1 %}s{% endif %}
+            {% endif %}
+            .
+          </p>
+        {% else %}
+          <p><em>No AI detections yet. Click “Analyze (OCR + AI)” to run detection.</em></p>
+        {% endif %}
+      </div>
+
     </div>
   </div>
-
 {% endblock %}

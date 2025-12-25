@@ -21,11 +21,12 @@ from django.views.decorators.http import require_POST
 from PIL import Image
 import pytesseract
 
-from .models import Photo, Species, Camera
+from .models import Photo, PhotoDetection, Species, Camera
 from .forms import PhotoEditForm, CameraForm
 from .utils.utils import require_researcher
 from wildlife.utils.ocr import crop_bottom_strip, extract_overlay_meta_split
 
+from .services.detection import run_megadetector, save_megadetector_results
 # ============================================================
 # Public pages
 # ============================================================
@@ -132,6 +133,8 @@ def upload_photos(request):
 def analyze_photo(request, pk):
     require_researcher(request.user)
     photo = get_object_or_404(Photo, pk=pk)
+
+    # 1) existing OCR pipeline
     try:
         img = Image.open(photo.image.path)
         strip = crop_bottom_strip(img, pct=0.042).convert("L")
@@ -174,6 +177,13 @@ def analyze_photo(request, pk):
         photo.temperature = data.temperature_c
     if data.pressure_inhg is not None:
         photo.pressure = data.pressure_inhg
+
+    # 2) run MegaDetector
+    try:
+        result = run_megadetector(photo, conf_threshold=0.2)
+        save_megadetector_results(photo, result)
+    except Exception as e:
+        print("MegaDetector ERROR:", e)
 
     photo.save()
     # After analyzing, show the edited photo page so the user can review/adjust fields
@@ -235,6 +245,30 @@ def unpublish_photo(request, pk):
     photo.save()
     return redirect("wildlife:gallery")
 
+
+@login_required
+def photo_detail(request, pk):
+    photo = get_object_or_404(Photo, pk=pk)
+
+    # get image size
+    img_width = photo.image.width
+    img_height = photo.image.height
+
+    boxes = []
+    for det in photo.detections.all():
+        boxes.append({
+            "left": det.x * img_width if det.x is not None else 0,
+            "top": det.y * img_height if det.y is not None else 0,
+            "width": det.w * img_width if det.w is not None else 0,
+            "height": det.h * img_height if det.h is not None else 0,
+            "label": det.get_category_display() if det.category else "Unknown",
+            "confidence": det.confidence,
+        })
+
+    return render(request, "wildlife/photo_detail.html", {
+        "photo": photo,
+        "detection_boxes": boxes,
+    })
 
 # ============================================================
 # Export
@@ -414,7 +448,23 @@ def photo_edit(request, pk):
     else:
         form = PhotoEditForm(instance=photo)
 
-    return render(request, "wildlife/photo_form.html", {"form": form, "photo": photo})
+    # detection summary
+    detections = photo.detections.all()
+    num_animals = detections.filter(category="1").count()
+    num_people = detections.filter(category="2").count()
+    num_vehicles = detections.filter(category="3").count()
+
+    context = {
+        "form": form,
+        "photo": photo,
+        "num_animals": num_animals,
+        "num_people": num_people,
+        "num_vehicles": num_vehicles,
+        "has_detections": detections.exists(),
+    }
+
+
+    return render(request, "wildlife/photo_form.html", context)
 
 
 # Lock endpoints removed — camera open/close no longer used.
