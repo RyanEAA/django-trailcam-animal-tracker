@@ -246,29 +246,23 @@ def unpublish_photo(request, pk):
     return redirect("wildlife:gallery")
 
 
-@login_required
-def photo_detail(request, pk):
+def photo_card_detail(request, pk):
+    """Lightweight page showing the same info as a gallery card.
+    Non-researchers can view this page; researchers see an Unpublish button when applicable.
+    """
     photo = get_object_or_404(Photo, pk=pk)
 
-    # get image size
-    img_width = photo.image.width
-    img_height = photo.image.height
+    detections = photo.detections.all()
+    is_researcher = request.user.is_authenticated and getattr(request.user, "is_researcher", False)
+    can_unpublish = is_researcher and photo.is_published
 
-    boxes = []
-    for det in photo.detections.all():
-        boxes.append({
-            "left": det.x * img_width if det.x is not None else 0,
-            "top": det.y * img_height if det.y is not None else 0,
-            "width": det.w * img_width if det.w is not None else 0,
-            "height": det.h * img_height if det.h is not None else 0,
-            "label": det.get_category_display() if det.category else "Unknown",
-            "confidence": det.confidence,
-        })
-
-    return render(request, "wildlife/photo_detail.html", {
+    context = {
         "photo": photo,
-        "detection_boxes": boxes,
-    })
+        "can_unpublish": can_unpublish,
+        "detections": detections,
+    }
+
+    return render(request, "wildlife/photo_card_detail.html", context)
 
 # ============================================================
 # Export

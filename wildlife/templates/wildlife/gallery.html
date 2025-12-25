@@ -35,13 +35,7 @@
   <div style="display:flex; flex-wrap:wrap; gap:16px;">
     {% for photo in photos %}
       <div class="photo-card is-clickable"
-           {% if user.is_authenticated and user.is_researcher and not photo.is_published %}
-             data-edit-url="{% url 'wildlife:photo_edit' photo.id %}"
-           {% elif user.is_authenticated and user.is_researcher and photo.is_published %}
-             data-edit-url="{% url 'wildlife:photo_edit' photo.id %}"
-           {% else %}
-             data-edit-url="{% url 'wildlife:photo_detail' photo.id %}"
-           {% endif %}>
+           data-edit-url="{% url 'wildlife:photo_detail' photo.id %}">
         <div class="photo-title">
           {{ photo.image.name|default:"Photo" }}
         </div>
@@ -85,19 +79,7 @@
           </ul>
         </div>
 
-        {% if user.is_authenticated and user.is_researcher %}
-          <div class="card-actions">
-            <form method="post"
-                  action="{% url 'wildlife:unpublish_photo' photo.id %}">
-              {% csrf_token %}
-              <button class="btn"
-                      type="submit"
-                      onclick="event.stopPropagation(); return confirm('Unpublish this photo and move it back to staging?');">
-                Unpublish
-              </button>
-            </form>
-          </div>
-        {% endif %}
+        {# Unpublish handled on the card detail page for researchers. #}
       </div>
     {% endfor %}
   </div>

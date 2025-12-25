@@ -36,7 +36,8 @@
     <!-- RIGHT COLUMN: FORM + ACTIONS + AI SUMMARY -->
     <div style="flex:1;">
 
-      <!-- PHOTO EDIT FORM -->
+      <!-- PHOTO EDIT / READ-ONLY FORM -->
+      {% if not read_only %}
       <form method="post">
         {% csrf_token %}
         <table>
@@ -47,34 +48,53 @@
           <button class="btn btn-primary" type="submit">Save</button>
         </div>
       </form>
+      {% else %}
+        <table>
+          {{ form.as_table }}
+        </table>
+      {% endif %}
 
       <!-- ACTION BUTTONS -->
       <div style="margin-top:18px; display:flex; gap:8px; align-items:center;">
-        <form method="post" action="{% url 'wildlife:analyze_photo' photo.id %}">
-          {% csrf_token %}
-          <button class="btn" type="submit">Analyze (OCR + AI)</button>
-        </form>
-
-        {% if photo.date_taken and photo.time_taken and photo.temperature is not None and photo.pressure is not None %}
-          <form method="post" action="{% url 'wildlife:publish_photo' photo.id %}">
+        {% if not read_only %}
+          <form method="post" action="{% url 'wildlife:analyze_photo' photo.id %}">
             {% csrf_token %}
-            <button class="btn btn-primary" type="submit">Publish</button>
+            <button class="btn" type="submit">Analyze (OCR + AI)</button>
           </form>
-        {% endif %}
 
-        <form method="post" action="{% url 'wildlife:delete_photo_staging' photo.id %}">
-          {% csrf_token %}
-          <button class="btn"
-                  type="submit"
-                  onclick="return confirm('Delete this unpublished photo? This cannot be undone.');">
-            Delete
-          </button>
-        </form>
+          {% if photo.date_taken and photo.time_taken and photo.temperature is not None and photo.pressure is not None %}
+            <form method="post" action="{% url 'wildlife:publish_photo' photo.id %}">
+              {% csrf_token %}
+              <button class="btn btn-primary" type="submit">Publish</button>
+            </form>
+          {% endif %}
 
-        {% if has_detections %}
-          <button class="btn" id="toggle-boxes-btn" type="button">
-            Show bounding boxes
-          </button>
+          <form method="post" action="{% url 'wildlife:delete_photo_staging' photo.id %}">
+            {% csrf_token %}
+            <button class="btn"
+                    type="submit"
+                    onclick="return confirm('Delete this unpublished photo? This cannot be undone.');">
+              Delete
+            </button>
+          </form>
+
+          {% if has_detections %}
+            <button class="btn" id="toggle-boxes-btn" type="button">
+              Show bounding boxes
+            </button>
+          {% endif %}
+        {% else %}
+          {# Read-only detail view: researchers may unpublish; allow toggling boxes #}
+          {% if can_unpublish %}
+            <form method="post" action="{% url 'wildlife:unpublish_photo' photo.id %}">
+              {% csrf_token %}
+              <button class="btn" type="submit" onclick="return confirm('Unpublish this photo and move it back to staging?');">Unpublish</button>
+            </form>
+          {% endif %}
+
+          {% if has_detections %}
+            <button class="btn" id="toggle-boxes-btn" type="button">Show bounding boxes</button>
+          {% endif %}
         {% endif %}
       </div>
 
