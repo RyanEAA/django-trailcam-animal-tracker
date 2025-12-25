@@ -7,11 +7,29 @@
 
   <div style="display:flex; gap:20px; align-items:flex-start;">
 
-    <!-- LEFT COLUMN: IMAGE -->
+    <!-- LEFT COLUMN: IMAGE + OPTIONAL BOUNDING BOXES -->
     <div>
       {% if photo.image %}
-        <img src="{{ photo.image.url }}" alt="photo {{ photo.id }}"
-             style="max-width:560px; border-radius:8px;">
+        <div class="photo-wrapper" id="photo-wrapper">
+          <img src="{{ photo.image.url }}" alt="photo {{ photo.id }}"
+            style="display:block; max-width:560px; width:100%; height:auto; border-radius:8px;">
+
+          {% if has_detections %}
+            {% for box in detection_boxes %}
+              <div class="det-box"
+                   style="
+                     left: {{ box.left }}%;
+                     top: {{ box.top }}%;
+                     width: {{ box.width }}%;
+                     height: {{ box.height }}%;
+                   ">
+                <div class="det-label">
+                  {{ box.label }} ({{ box.confidence|floatformat:2 }})
+                </div>
+              </div>
+            {% endfor %}
+          {% endif %}
+        </div>
       {% endif %}
     </div>
 
@@ -52,6 +70,12 @@
             Delete
           </button>
         </form>
+
+        {% if has_detections %}
+          <button class="btn" id="toggle-boxes-btn" type="button">
+            Show bounding boxes
+          </button>
+        {% endif %}
       </div>
 
       <!-- AI DETECTION SUMMARY -->
@@ -80,4 +104,19 @@
 
     </div>
   </div>
+
+  {% if has_detections %}
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        const wrapper = document.getElementById('photo-wrapper');
+        const btn = document.getElementById('toggle-boxes-btn');
+        if (!wrapper || !btn) return;
+
+        btn.addEventListener('click', function () {
+          const showing = wrapper.classList.toggle('show-boxes');
+          btn.textContent = showing ? 'Hide bounding boxes' : 'Show bounding boxes';
+        });
+      });
+    </script>
+  {% endif %}
 {% endblock %}

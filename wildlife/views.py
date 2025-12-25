@@ -448,11 +448,31 @@ def photo_edit(request, pk):
     else:
         form = PhotoEditForm(instance=photo)
 
-    # detection summary
+    # ---- detection summary ----
     detections = photo.detections.all()
     num_animals = detections.filter(category="1").count()
     num_people = detections.filter(category="2").count()
     num_vehicles = detections.filter(category="3").count()
+
+    # ---- bounding boxes (percent coords) ----
+    # Store boxes as percentages so they scale with the displayed image size
+    detection_boxes = []
+    if photo.image and detections.exists():
+        for det in detections:
+            # det.x, det.y, det.w, det.h are normalized (0..1)
+            left_pct = (det.x or 0) * 100
+            top_pct = (det.y or 0) * 100
+            width_pct = (det.w or 0) * 100
+            height_pct = (det.h or 0) * 100
+
+            detection_boxes.append({
+                "left": left_pct,
+                "top": top_pct,
+                "width": width_pct,
+                "height": height_pct,
+                "label": det.get_category_display() if det.category else "Unknown",
+                "confidence": det.confidence,
+            })
 
     context = {
         "form": form,
@@ -461,8 +481,8 @@ def photo_edit(request, pk):
         "num_people": num_people,
         "num_vehicles": num_vehicles,
         "has_detections": detections.exists(),
+        "detection_boxes": detection_boxes,
     }
-
 
     return render(request, "wildlife/photo_form.html", context)
 

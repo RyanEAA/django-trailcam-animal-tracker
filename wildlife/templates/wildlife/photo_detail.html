@@ -21,8 +21,11 @@
 
 {% if user.is_authenticated and user.is_researcher %}
   <p>
-    <a href="{% url 'wildlife:edit_photo' photo.pk %}">Edit</a> |
-    <a href="{% url 'wildlife:delete_photo' photo.pk %}">Delete</a>
+    <a href="{% url 'wildlife:photo_edit' photo.pk %}">Edit</a> |
+    <form method="post" action="{% url 'wildlife:delete_photo_staging' photo.pk %}" style="display:inline;">
+      {% csrf_token %}
+      <button class="btn" type="submit" onclick="return confirm('Delete this unpublished photo? This cannot be undone.');">Delete</button>
+    </form>
   </p>
 {% endif %}
 {% endblock %}

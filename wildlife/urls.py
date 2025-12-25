@@ -8,7 +8,8 @@ urlpatterns = [
     path("gallery/", views.gallery, name="gallery"),
     path("upload/", views.upload_photos, name="upload_photos"),
 
-    # Phot detail and edit
+    # Photo detail and edit
+    path("photo/<int:pk>/", views.photo_detail, name="photo_detail"),
     path("photo/<int:pk>/analyze/", views.analyze_photo, name="analyze_photo"),
     path("photo/<int:pk>/publish/", views.publish_photo, name="publish_photo"),
     path("photo/<int:pk>/delete-staging/", views.delete_photo_staging, name="delete_photo_staging"),
