@@ -89,7 +89,49 @@ def gallery(request):
 
 def photo_detail(request, pk):
     photo = get_object_or_404(Photo, pk=pk)
-    return render(request, "wildlife/photo_detail.html", {"photo": photo})
+
+    # Build a disabled form so we can reuse `photo_form.html` styling in read-only mode
+    form = PhotoEditForm(instance=photo)
+    for name, field in form.fields.items():
+        field.widget.attrs["disabled"] = "disabled"
+
+    detections = photo.detections.all()
+    num_animals = detections.filter(category="1").count()
+    num_people = detections.filter(category="2").count()
+    num_vehicles = detections.filter(category="3").count()
+
+    detection_boxes = []
+    if photo.image and detections.exists():
+        for det in detections:
+            left_pct = (det.x or 0) * 100
+            top_pct = (det.y or 0) * 100
+            width_pct = (det.w or 0) * 100
+            height_pct = (det.h or 0) * 100
+            detection_boxes.append({
+                "left": left_pct,
+                "top": top_pct,
+                "width": width_pct,
+                "height": height_pct,
+                "label": det.get_category_display() if det.category else "Unknown",
+                "confidence": det.confidence,
+            })
+
+    is_researcher = request.user.is_authenticated and getattr(request.user, "is_researcher", False)
+    can_unpublish = is_researcher and photo.is_published
+
+    context = {
+        "form": form,
+        "photo": photo,
+        "num_animals": num_animals,
+        "num_people": num_people,
+        "num_vehicles": num_vehicles,
+        "has_detections": detections.exists(),
+        "detection_boxes": detection_boxes,
+        "read_only": True,
+        "can_unpublish": can_unpublish,
+    }
+
+    return render(request, "wildlife/photo_form.html", context)
 
 
 # ============================================================
