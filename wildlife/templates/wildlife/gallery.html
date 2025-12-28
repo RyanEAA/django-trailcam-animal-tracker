@@ -31,9 +31,10 @@
   });
 </script>
 
-{% if photos %}
+{% if photos_with_boxes %}
   <div style="display:flex; flex-wrap:wrap; gap:16px;">
-    {% for photo in photos %}
+    {% for item in photos_with_boxes %}
+      {% with photo=item.photo %}
       <div class="photo-card is-clickable"
            data-edit-url="{% url 'wildlife:photo_detail' photo.id %}">
         <div class="photo-title">
@@ -41,7 +42,19 @@
         </div>
 
         {% if photo.image %}
-          <img src="{{ photo.image.url }}" class="photo-zoom" alt="photo {{ photo.id }}">
+          <div class="photo-wrapper show-boxes">
+            <img src="{{ photo.image.url }}" class="photo-zoom" alt="photo {{ photo.id }}">
+            {% for box in item.detection_boxes %}
+              <div class="det-box{% if box.is_person %} det-box-person{% endif %}"
+                   style="
+                     left: {{ box.left }}%;
+                     top: {{ box.top }}%;
+                     width: {{ box.width }}%;
+                     height: {{ box.height }}%;
+                   ">
+              </div>
+            {% endfor %}
+          </div>
         {% endif %}
 
         <div class="photo-params">
@@ -82,6 +95,7 @@
 
         {# Unpublish handled on the card detail page for researchers. #}
       </div>
+      {% endwith %}
     {% endfor %}
   </div>
 {% else %}

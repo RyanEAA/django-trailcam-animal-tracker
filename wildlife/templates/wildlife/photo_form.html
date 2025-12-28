@@ -16,7 +16,7 @@
 
           {% if has_detections %}
             {% for box in detection_boxes %}
-              <div class="det-box" data-detection-id="{{ box.id }}"
+              <div class="det-box{% if box.is_person %} det-box-person{% endif %}" data-detection-id="{{ box.id }}"
                    style="
                      left: {{ box.left }}%;
                      top: {{ box.top }}%;

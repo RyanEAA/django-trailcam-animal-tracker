@@ -394,6 +394,13 @@ body{
   display: none;
   pointer-events: none; /* don't block clicks on underlying controls */
 }
+
+/* Black out person detections for privacy */
+.det-box-person {
+  background: #000;
+  border-color: #000;
+}
+
 .det-label {
   position: absolute;
   top: -1.2em;

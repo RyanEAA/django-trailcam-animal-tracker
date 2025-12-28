@@ -22,7 +22,7 @@ from django.views.decorators.http import require_POST
 from django.conf import settings
 from django.core.files import File
 
-from PIL import Image
+from PIL import Image, ImageDraw
 import pytesseract
 
 from .models import Photo, PhotoDetection, Species, Camera
@@ -75,8 +75,32 @@ def gallery(request):
     if pressure_max:
         qs = qs.filter(pressure__lte=pressure_max)
 
+    # Prefetch detections for each photo to build bounding boxes
+    qs = qs.prefetch_related('detections__species')
+    
+    # Build detection boxes for each photo
+    photos_with_boxes = []
+    for photo in qs:
+        detection_boxes = []
+        for det in photo.detections.filter(is_shown=True):
+            left_pct = (det.x or 0) * 100
+            top_pct = (det.y or 0) * 100
+            width_pct = (det.w or 0) * 100
+            height_pct = (det.h or 0) * 100
+            detection_boxes.append({
+                "left": left_pct,
+                "top": top_pct,
+                "width": width_pct,
+                "height": height_pct,
+                "is_person": det.is_person(),
+            })
+        photos_with_boxes.append({
+            "photo": photo,
+            "detection_boxes": detection_boxes,
+        })
+
     context = {
-        "photos": qs,
+        "photos_with_boxes": photos_with_boxes,
         "species_options": Species.objects.all().order_by("name"),
         "camera_options": Camera.objects.all().order_by("name"),
         "selected_species_ids": list(map(str, species_ids)),
@@ -127,6 +151,7 @@ def photo_detail(request, pk):
                 "species_name": det.species.name if det.species and det.species.name else None,
                 "confidence": det.confidence,
                 "bbox_tuple": (left_pct, top_pct, width_pct, height_pct),
+                "is_person": det.is_person(),
             })
 
     is_researcher = request.user.is_authenticated and getattr(request.user, "is_researcher", False)
@@ -372,6 +397,32 @@ def publish_photo(request, pk):
 
     if photo.date_taken is None or photo.time_taken is None or photo.temperature is None or photo.pressure is None:
         return HttpResponseForbidden("Photo must be analyzed before publishing.")
+
+    # Permanently black out human detections in the image
+    if photo.image:
+        person_detections = photo.detections.filter(category="2", is_shown=True)
+        
+        if person_detections.exists():
+            # Open the image
+            img_path = photo.image.path
+            img = Image.open(img_path)
+            draw = ImageDraw.Draw(img)
+            
+            # Draw black rectangles over person detections
+            width, height = img.size
+            for det in person_detections:
+                if det.x is not None and det.y is not None and det.w is not None and det.h is not None:
+                    # Convert normalized coordinates to pixel coordinates
+                    x1 = int(float(det.x) * width)
+                    y1 = int(float(det.y) * height)
+                    x2 = int((float(det.x) + float(det.w)) * width)
+                    y2 = int((float(det.y) + float(det.h)) * height)
+                    
+                    # Draw black filled rectangle
+                    draw.rectangle([x1, y1, x2, y2], fill='black')
+            
+            # Save the modified image back
+            img.save(img_path)
 
     photo.is_published = True
     photo.save()
