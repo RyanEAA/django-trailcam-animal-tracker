@@ -233,10 +233,17 @@ def upload_photos(request):
                     if ocr_data:
                         if ocr_data.camera_name:
                             cam = Camera.objects.filter(name=ocr_data.camera_name).first()
-                            if cam:
-                                photo.camera = cam
-                                photo.latitude = cam.base_latitude
-                                photo.longitude = cam.base_longitude
+                            if not cam:
+                                # Create new camera with default St. Edwards University coordinates
+                                cam = Camera.objects.create(
+                                    name=ocr_data.camera_name,
+                                    base_latitude=30.2311,
+                                    base_longitude=-97.7524,
+                                    description="needs proper lat and long"
+                                )
+                            photo.camera = cam
+                            photo.latitude = cam.base_latitude
+                            photo.longitude = cam.base_longitude
                         
                         if ocr_data.date_taken:
                             photo.date_taken = ocr_data.date_taken
@@ -317,16 +324,23 @@ def analyze_photo(request, pk):
 
     data = extract_overlay_meta_split(t_left, t_center, t_right)
 
-    # set camera if exists
+    # set camera if exists, create if not
     if data.camera_name:
         cam = Camera.objects.filter(name=data.camera_name).first()
-        if cam:
-            photo.camera = cam
-            # Also update lat/long from camera if not set
-            if photo.latitude is None:
-                photo.latitude = cam.base_latitude
-            if photo.longitude is None:
-                photo.longitude = cam.base_longitude
+        if not cam:
+            # Create new camera with default St. Edwards University coordinates
+            cam = Camera.objects.create(
+                name=data.camera_name,
+                base_latitude=30.2311,
+                base_longitude=-97.7524,
+                description="needs proper lat and long"
+            )
+        photo.camera = cam
+        # Also update lat/long from camera if not set
+        if photo.latitude is None:
+            photo.latitude = cam.base_latitude
+        if photo.longitude is None:
+            photo.longitude = cam.base_longitude
 
     if data.date_taken:
         photo.date_taken = data.date_taken
