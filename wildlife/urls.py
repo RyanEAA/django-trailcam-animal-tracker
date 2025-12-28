@@ -16,6 +16,9 @@ urlpatterns = [
     path("photo/<int:pk>/delete-staging/", views.delete_photo_staging, name="delete_photo_staging"),
     # photo meta JSON endpoint removed; use page-based editor
     path("photo/<int:pk>/unpublish/", views.unpublish_photo, name="unpublish_photo"),
+    
+    # Detection management
+    path("detection/<int:pk>/update-species/", views.update_detection_species, name="update_detection_species"),
 
     ## photo model open/close locks removed
 

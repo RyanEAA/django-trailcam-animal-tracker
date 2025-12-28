@@ -16,7 +16,7 @@
 
           {% if has_detections %}
             {% for box in detection_boxes %}
-              <div class="det-box"
+              <div class="det-box" data-detection-id="{{ box.id }}"
                    style="
                      left: {{ box.left }}%;
                      top: {{ box.top }}%;
@@ -117,30 +117,50 @@
             {% endif %}
             .
           </p>
-          {% if detection_species_names %}
-            <div style="margin-top:6px;">
-              <strong>Species:</strong>
-              <ul style="margin:6px 0 0 18px; padding:0; list-style:disc;">
-                {% for name in detection_species_names %}
-                  <li>{{ name }}</li>
-                {% endfor %}
-              </ul>
-            </div>
-          {% endif %}
 
           {% if detection_boxes %}
             <div style="margin-top:10px;">
               <strong>Detection details:</strong>
-              <ul style="margin:6px 0 0 18px; padding:0; list-style:disc;">
-                {% for box in detection_boxes %}
-                  <li>
-                    {{ box.species_name|default:box.label }} — conf {{ box.confidence|floatformat:2 }}
-                    {% if box.bbox_tuple %}
-                      (x {{ box.bbox_tuple.0|floatformat:1 }}%, y {{ box.bbox_tuple.1|floatformat:1 }}%, w {{ box.bbox_tuple.2|floatformat:1 }}%, h {{ box.bbox_tuple.3|floatformat:1 }}%)
-                    {% endif %}
-                  </li>
-                {% endfor %}
-              </ul>
+              {% if not read_only %}
+                {# Researcher edit mode: checkboxes + editable species names #}
+                <ul style="margin:6px 0 0 0; padding:0; list-style:none;">
+                  {% for box in detection_boxes %}
+                    <li style="margin-bottom:8px; display:flex; align-items:center; gap:8px;">
+                      <input type="checkbox" 
+                             class="detection-visibility-toggle" 
+                             data-detection-id="{{ box.id }}"
+                             {% if box.is_shown %}checked{% endif %}
+                             style="cursor:pointer;">
+                      
+                      <input type="text" 
+                             class="species-name-input" 
+                             data-detection-id="{{ box.id }}"
+                             value="{{ box.species_name|default:box.label }}"
+                             style="padding:4px 8px; border:1px solid #ccc; border-radius:4px; flex:0 0 180px;"
+                             placeholder="Species name">
+                      
+                      <span style="color:#666; font-size:0.9em;">
+                        conf {{ box.confidence|floatformat:2 }}
+                        {% if box.bbox_tuple %}
+                          (x {{ box.bbox_tuple.0|floatformat:1 }}%, y {{ box.bbox_tuple.1|floatformat:1 }}%, w {{ box.bbox_tuple.2|floatformat:1 }}%, h {{ box.bbox_tuple.3|floatformat:1 }}%)
+                        {% endif %}
+                      </span>
+                    </li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                {# Read-only public view: simple bullet list #}
+                <ul style="margin:6px 0 0 18px; padding:0; list-style:disc;">
+                  {% for box in detection_boxes %}
+                    <li>
+                      {{ box.species_name|default:box.label }} — conf {{ box.confidence|floatformat:2 }}
+                      {% if box.bbox_tuple %}
+                        (x {{ box.bbox_tuple.0|floatformat:1 }}%, y {{ box.bbox_tuple.1|floatformat:1 }}%, w {{ box.bbox_tuple.2|floatformat:1 }}%, h {{ box.bbox_tuple.3|floatformat:1 }}%)
+                      {% endif %}
+                    </li>
+                  {% endfor %}
+                </ul>
+              {% endif %}
             </div>
           {% endif %}
         {% else %}
@@ -156,12 +176,113 @@
       document.addEventListener('DOMContentLoaded', function () {
         const wrapper = document.getElementById('photo-wrapper');
         const btn = document.getElementById('toggle-boxes-btn');
-        if (!wrapper || !btn) return;
+        
+        // Toggle all boxes visibility button
+        if (wrapper && btn) {
+          btn.addEventListener('click', function () {
+            const showing = wrapper.classList.toggle('show-boxes');
+            btn.textContent = showing ? 'Hide bounding boxes' : 'Show bounding boxes';
+          });
+        }
 
-        btn.addEventListener('click', function () {
-          const showing = wrapper.classList.toggle('show-boxes');
-          btn.textContent = showing ? 'Hide bounding boxes' : 'Show bounding boxes';
+        // Individual detection visibility toggles
+        const visibilityToggles = document.querySelectorAll('.detection-visibility-toggle');
+        visibilityToggles.forEach(checkbox => {
+          checkbox.addEventListener('change', function() {
+            const detectionId = this.getAttribute('data-detection-id');
+            const isShown = this.checked;
+            
+            // Toggle bounding box visibility immediately
+            const detBox = document.querySelector(`.det-box[data-detection-id="${detectionId}"]`);
+            if (detBox) {
+              detBox.style.display = isShown ? '' : 'none';
+            }
+            
+            // Save to database
+            fetch(`/detection/${detectionId}/update-species/`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': getCookie('csrftoken')
+              },
+              body: `is_shown=${isShown}`
+            })
+            .then(response => response.json())
+            .then(data => {
+              if (!data.success) {
+                console.error('Failed to update detection visibility');
+              }
+            })
+            .catch(error => {
+              console.error('Error updating detection visibility:', error);
+            });
+          });
         });
+
+        // Species name input updates (with debouncing)
+        const speciesInputs = document.querySelectorAll('.species-name-input');
+        let updateTimeout = null;
+        
+        speciesInputs.forEach(input => {
+          input.addEventListener('input', function() {
+            const detectionId = this.getAttribute('data-detection-id');
+            const newSpeciesName = this.value.trim();
+            
+            // Clear previous timeout
+            if (updateTimeout) {
+              clearTimeout(updateTimeout);
+            }
+            
+            // Debounce the update (wait 500ms after user stops typing)
+            updateTimeout = setTimeout(() => {
+              updateSpeciesName(detectionId, newSpeciesName);
+            }, 500);
+          });
+        });
+
+        function updateSpeciesName(detectionId, speciesName) {
+          fetch(`/detection/${detectionId}/update-species/`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: `species_name=${encodeURIComponent(speciesName)}`
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              // Update the label on the bounding box
+              const detBox = document.querySelector(`.det-box[data-detection-id="${detectionId}"]`);
+              if (detBox) {
+                const label = detBox.querySelector('.det-label');
+                if (label) {
+                  const confidenceMatch = label.textContent.match(/\([\d.]+\)$/);
+                  const confidence = confidenceMatch ? confidenceMatch[0] : '';
+                  label.textContent = `${data.species_name || 'Unknown'} ${confidence}`;
+                }
+              }
+            }
+          })
+          .catch(error => {
+            console.error('Error updating species name:', error);
+          });
+        }
+
+        function getCookie(name) {
+          let cookieValue = null;
+          if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+              const cookie = cookies[i].trim();
+              if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+              }
+            }
+          }
+          return cookieValue;
+        }
       });
     </script>
   {% endif %}

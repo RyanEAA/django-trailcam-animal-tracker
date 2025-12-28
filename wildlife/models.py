@@ -126,6 +126,9 @@ class PhotoDetection(models.Model):
 
     source = models.CharField(max_length=50, default="megadetector")  # ai | human
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    # Controls whether detection is visible (researchers can toggle)
+    is_shown = models.BooleanField(default=True)
 
     def is_animal(self):
         return self.category == "1"

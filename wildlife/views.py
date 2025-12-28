@@ -99,7 +99,8 @@ def photo_detail(request, pk):
     for name, field in form.fields.items():
         field.widget.attrs["disabled"] = "disabled"
 
-    detections = photo.detections.all()
+    # Only show detections marked as visible
+    detections = photo.detections.filter(is_shown=True)
     num_animals = detections.filter(category="1").count()
     num_people = detections.filter(category="2").count()
     num_vehicles = detections.filter(category="3").count()
@@ -117,6 +118,7 @@ def photo_detail(request, pk):
             width_pct = (det.w or 0) * 100
             height_pct = (det.h or 0) * 100
             detection_boxes.append({
+                "id": det.id,
                 "left": left_pct,
                 "top": top_pct,
                 "width": width_pct,
@@ -391,6 +393,37 @@ def update_photo_meta(request, pk):
 
 @login_required
 @require_POST
+def update_detection_species(request, pk):
+    """Update the species name and visibility for a detection."""
+    require_researcher(request.user)
+    detection = get_object_or_404(PhotoDetection, pk=pk)
+    
+    # Update species name if provided
+    if "species_name" in request.POST:
+        species_name = request.POST.get("species_name", "").strip()
+        if species_name:
+            from wildlife.services.speciesnet import get_or_create_species
+            species = get_or_create_species(species_name)
+            detection.species = species
+        else:
+            detection.species = None
+    
+    # Update visibility if provided
+    if "is_shown" in request.POST:
+        is_shown = request.POST.get("is_shown") == "true"
+        detection.is_shown = is_shown
+    
+    detection.save()
+    
+    return JsonResponse({
+        "success": True,
+        "species_name": detection.species.name if detection.species else None,
+        "is_shown": detection.is_shown
+    })
+
+
+@login_required
+@require_POST
 def unpublish_photo(request, pk):
     require_researcher(request.user)
     photo = get_object_or_404(Photo, pk=pk)
@@ -600,6 +633,7 @@ def photo_edit(request, pk):
         form = PhotoEditForm(instance=photo)
 
     # ---- detection summary ----
+    # Researchers see all detections (including hidden ones) so they can toggle them
     detections = photo.detections.all()
     num_animals = detections.filter(category="1").count()
     num_people = detections.filter(category="2").count()
@@ -622,6 +656,7 @@ def photo_edit(request, pk):
             height_pct = (det.h or 0) * 100
 
             detection_boxes.append({
+                "id": det.id,
                 "left": left_pct,
                 "top": top_pct,
                 "width": width_pct,
@@ -630,6 +665,7 @@ def photo_edit(request, pk):
                 "species_name": det.species.name if det.species and det.species.name else None,
                 "confidence": det.confidence,
                 "bbox_tuple": (left_pct, top_pct, width_pct, height_pct),
+                "is_shown": det.is_shown,
             })
 
     context = {
