@@ -66,7 +66,8 @@ class Photo(models.Model):
     )
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
-    megadetector_result = models.JSONField(null=True, blank=True)
+    # Store SpeciesNet raw JSON results for reference
+    speciesnet_result = models.JSONField(null=True, blank=True)
 
     opened_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

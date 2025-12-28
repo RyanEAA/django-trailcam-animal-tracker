@@ -1,0 +1,40 @@
+{
+ "predictions": [
+  {
+   "filepath": "/Users/ryanaparicio/Desktop/django-trailcam-animal-tracker/media/test/IMG_0744.JPG",
+   "classifications": {
+    "classes": [
+     "ffe603fc-4920-4302-96d0-65f708bd5b2d;mammalia;carnivora;canidae;urocyon;cinereoargenteus;grey fox",
+     "4457a0c6-cb68-44c0-9c27-ad08abe57755;mammalia;carnivora;canidae;vulpes;macrotis;kit fox",
+     "2ed0c8d0-c194-43d0-be54-7e2b1215c795;mammalia;carnivora;canidae;lycalopex;vetulus;hoary fox",
+     "3184697f-51ad-4608-9a28-9edb5500159c;mammalia;carnivora;canidae;;;canine family",
+     "7a3f5fb1-8e10-44c8-b040-d0672788540c;mammalia;carnivora;canidae;lycalopex;griseus;argentine gray fox"
+    ],
+    "scores": [
+     0.9972,
+     0.0009,
+     0.0006,
+     0.0005,
+     0.0002
+    ]
+   },
+   "detections": [
+    {
+     "category": "1",
+     "label": "animal",
+     "conf": 0.9584,
+     "bbox": [
+      0.5049,
+      0.4458,
+      0.2323,
+      0.1653
+     ]
+    }
+   ],
+   "prediction": "ffe603fc-4920-4302-96d0-65f708bd5b2d;mammalia;carnivora;canidae;urocyon;cinereoargenteus;grey fox",
+   "prediction_score": 0.9972,
+   "prediction_source": "classifier",
+   "model_version": "4.0.2a"
+  }
+ ]
+}

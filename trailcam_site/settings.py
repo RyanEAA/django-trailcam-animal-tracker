@@ -80,6 +80,9 @@ STATIC_URL = "/static/"     # 👈 THIS is what admin should use
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# SpeciesNet inbox (temporary staging before moving to trailcam/)
+SPECIESNET_INBOX_ROOT = MEDIA_ROOT / "speciesnet_inbox"
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # custom user (if you have one in wildlife.models)

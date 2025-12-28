@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 import re
 import csv
+import shutil
+from pathlib import Path
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -17,6 +19,8 @@ from django.http import (
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from django.conf import settings
+from django.core.files import File
 
 from PIL import Image
 import pytesseract
@@ -26,7 +30,7 @@ from .forms import PhotoEditForm, CameraForm
 from .utils.utils import require_researcher
 from wildlife.utils.ocr import crop_bottom_strip, extract_overlay_meta_split
 
-from .services.detection import run_megadetector, save_megadetector_results
+from .services.speciesnet import run_speciesnet_on_image, save_speciesnet_results
 # ============================================================
 # Public pages
 # ============================================================
@@ -100,6 +104,11 @@ def photo_detail(request, pk):
     num_people = detections.filter(category="2").count()
     num_vehicles = detections.filter(category="3").count()
 
+    detection_species_names = []
+    for det in detections:
+        if det.species and det.species.name:
+            detection_species_names.append(det.species.name)
+
     detection_boxes = []
     if photo.image and detections.exists():
         for det in detections:
@@ -113,7 +122,9 @@ def photo_detail(request, pk):
                 "width": width_pct,
                 "height": height_pct,
                 "label": det.get_category_display() if det.category else "Unknown",
+                "species_name": det.species.name if det.species and det.species.name else None,
                 "confidence": det.confidence,
+                "bbox_tuple": (left_pct, top_pct, width_pct, height_pct),
             })
 
     is_researcher = request.user.is_authenticated and getattr(request.user, "is_researcher", False)
@@ -126,6 +137,7 @@ def photo_detail(request, pk):
         "num_people": num_people,
         "num_vehicles": num_vehicles,
         "has_detections": detections.exists(),
+        "detection_species_names": sorted(set(detection_species_names)),
         "detection_boxes": detection_boxes,
         "read_only": True,
         "can_unpublish": can_unpublish,
@@ -149,9 +161,107 @@ def upload_photos(request):
         if not files:
             error = "No files received. Please choose images before uploading."
         else:
-            for f in files:
-                Photo.objects.create(image=f, uploaded_by=request.user)
-            return redirect("wildlife:upload_photos")
+            # Ensure speciesnet_inbox directory exists
+            inbox_path = Path(settings.SPECIESNET_INBOX_ROOT)
+            inbox_path.mkdir(parents=True, exist_ok=True)
+            
+            trailcam_path = Path(settings.MEDIA_ROOT) / "trailcam"
+            trailcam_path.mkdir(parents=True, exist_ok=True)
+            
+            # Process each uploaded file
+            for uploaded_file in files:
+                try:
+                    # 1. Save to speciesnet_inbox temporarily
+                    inbox_file_path = inbox_path / uploaded_file.name
+                    with open(inbox_file_path, 'wb+') as destination:
+                        for chunk in uploaded_file.chunks():
+                            destination.write(chunk)
+                    
+                    # 2. Run OCR to extract metadata
+                    ocr_data = None
+                    try:
+                        img = Image.open(inbox_file_path)
+                        strip = crop_bottom_strip(img, pct=0.042).convert("L")
+                        
+                        # upscale to help OCR
+                        scale = 3
+                        strip = strip.resize((strip.width * scale, strip.height * scale))
+                        
+                        # binarize (white text on black bar)
+                        strip = strip.point(lambda p: 255 if p > 140 else 0)
+                        
+                        w, h = strip.size
+                        left   = strip.crop((0, 0, int(w * 0.40), h))
+                        center = strip.crop((int(w * 0.35), 0, int(w * 0.75), h))
+                        right  = strip.crop((int(w * 0.70), 0, w, h))
+                        
+                        config = "--oem 1 --psm 7"
+                        t_left   = pytesseract.image_to_string(left, config=config)
+                        t_center = pytesseract.image_to_string(center, config=config)
+                        t_right  = pytesseract.image_to_string(right, config=config)
+                        
+                        ocr_data = extract_overlay_meta_split(t_left, t_center, t_right)
+                    except Exception as e:
+                        print(f"OCR warning for {uploaded_file.name}: {e}")
+                    
+                    # 3. Run SpeciesNet
+                    speciesnet_result = run_speciesnet_on_image(inbox_file_path)
+                    
+                    # 4. Move file to trailcam folder
+                    final_file_path = trailcam_path / uploaded_file.name
+                    # Handle name collisions
+                    counter = 1
+                    while final_file_path.exists():
+                        stem = Path(uploaded_file.name).stem
+                        suffix = Path(uploaded_file.name).suffix
+                        final_file_path = trailcam_path / f"{stem}_{counter}{suffix}"
+                        counter += 1
+                    
+                    shutil.move(str(inbox_file_path), str(final_file_path))
+                    
+                    # 5. Create Photo object with metadata
+                    relative_path = f"trailcam/{final_file_path.name}"
+                    photo = Photo(
+                        image=relative_path,
+                        uploaded_by=request.user,
+                        is_published=False
+                    )
+                    
+                    # Apply OCR metadata if available
+                    if ocr_data:
+                        if ocr_data.camera_name:
+                            cam = Camera.objects.filter(name=ocr_data.camera_name).first()
+                            if cam:
+                                photo.camera = cam
+                                photo.latitude = cam.base_latitude
+                                photo.longitude = cam.base_longitude
+                        
+                        if ocr_data.date_taken:
+                            photo.date_taken = ocr_data.date_taken
+                        if ocr_data.time_taken:
+                            photo.time_taken = ocr_data.time_taken
+                        if ocr_data.temperature_c is not None:
+                            photo.temperature = ocr_data.temperature_c
+                        if ocr_data.pressure_inhg is not None:
+                            photo.pressure = ocr_data.pressure_inhg
+                    
+                    photo.save()
+                    
+                    # 6. Save SpeciesNet detection results
+                    save_speciesnet_results(photo, speciesnet_result)
+                    
+                except Exception as e:
+                    print(f"Error processing {uploaded_file.name}: {e}")
+                    error = f"Error processing some files: {e}"
+                    # Clean up inbox file if it still exists
+                    try:
+                        if inbox_file_path.exists():
+                            inbox_file_path.unlink()
+                    except:
+                        pass
+            
+            if not error:
+                return redirect("wildlife:upload_photos")
 
     recent_photos = Photo.objects.filter(is_published=False).order_by("-uploaded_at")[:50]
 
@@ -176,7 +286,7 @@ def analyze_photo(request, pk):
     require_researcher(request.user)
     photo = get_object_or_404(Photo, pk=pk)
 
-    # 1) existing OCR pipeline
+    # 1) Run OCR pipeline
     try:
         img = Image.open(photo.image.path)
         strip = crop_bottom_strip(img, pct=0.042).convert("L")
@@ -188,7 +298,7 @@ def analyze_photo(request, pk):
         # binarize (white text on black bar)
         strip = strip.point(lambda p: 255 if p > 140 else 0)
 
-        config = "--oem 1 --psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/:.AMPMCHGinHg "
+        config = "--oem 1 --psm 7"
 
         w, h = strip.size
         left   = strip.crop((0, 0, int(w * 0.40), h))                 # temp/pressure
@@ -210,6 +320,11 @@ def analyze_photo(request, pk):
         cam = Camera.objects.filter(name=data.camera_name).first()
         if cam:
             photo.camera = cam
+            # Also update lat/long from camera if not set
+            if photo.latitude is None:
+                photo.latitude = cam.base_latitude
+            if photo.longitude is None:
+                photo.longitude = cam.base_longitude
 
     if data.date_taken:
         photo.date_taken = data.date_taken
@@ -220,14 +335,14 @@ def analyze_photo(request, pk):
     if data.pressure_inhg is not None:
         photo.pressure = data.pressure_inhg
 
-    # 2) run MegaDetector
-    try:
-        result = run_megadetector(photo, conf_threshold=0.2)
-        save_megadetector_results(photo, result)
-    except Exception as e:
-        print("MegaDetector ERROR:", e)
-
     photo.save()
+
+    # 2) Run SpeciesNet
+    try:
+        result = run_speciesnet_on_image(Path(photo.image.path))
+        save_speciesnet_results(photo, result)
+    except Exception as e:
+        print("SpeciesNet ERROR:", e)
     # After analyzing, show the edited photo page so the user can review/adjust fields
     return redirect("wildlife:photo_edit", pk=pk)
 
@@ -490,6 +605,11 @@ def photo_edit(request, pk):
     num_people = detections.filter(category="2").count()
     num_vehicles = detections.filter(category="3").count()
 
+    detection_species_names = []
+    for det in detections:
+        if det.species and det.species.name:
+            detection_species_names.append(det.species.name)
+
     # ---- bounding boxes (percent coords) ----
     # Store boxes as percentages so they scale with the displayed image size
     detection_boxes = []
@@ -507,7 +627,9 @@ def photo_edit(request, pk):
                 "width": width_pct,
                 "height": height_pct,
                 "label": det.get_category_display() if det.category else "Unknown",
+                "species_name": det.species.name if det.species and det.species.name else None,
                 "confidence": det.confidence,
+                "bbox_tuple": (left_pct, top_pct, width_pct, height_pct),
             })
 
     context = {
@@ -517,6 +639,7 @@ def photo_edit(request, pk):
         "num_people": num_people,
         "num_vehicles": num_vehicles,
         "has_detections": detections.exists(),
+        "detection_species_names": sorted(set(detection_species_names)),
         "detection_boxes": detection_boxes,
     }
 

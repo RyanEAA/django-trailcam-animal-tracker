@@ -24,7 +24,7 @@
                      height: {{ box.height }}%;
                    ">
                 <div class="det-label">
-                  {{ box.label }} ({{ box.confidence|floatformat:2 }})
+                  {{ box.species_name|default:box.label }} ({{ box.confidence|floatformat:2 }})
                 </div>
               </div>
             {% endfor %}
@@ -117,6 +117,32 @@
             {% endif %}
             .
           </p>
+          {% if detection_species_names %}
+            <div style="margin-top:6px;">
+              <strong>Species:</strong>
+              <ul style="margin:6px 0 0 18px; padding:0; list-style:disc;">
+                {% for name in detection_species_names %}
+                  <li>{{ name }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
+
+          {% if detection_boxes %}
+            <div style="margin-top:10px;">
+              <strong>Detection details:</strong>
+              <ul style="margin:6px 0 0 18px; padding:0; list-style:disc;">
+                {% for box in detection_boxes %}
+                  <li>
+                    {{ box.species_name|default:box.label }} — conf {{ box.confidence|floatformat:2 }}
+                    {% if box.bbox_tuple %}
+                      (x {{ box.bbox_tuple.0|floatformat:1 }}%, y {{ box.bbox_tuple.1|floatformat:1 }}%, w {{ box.bbox_tuple.2|floatformat:1 }}%, h {{ box.bbox_tuple.3|floatformat:1 }}%)
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
         {% else %}
           <p><em>No AI detections yet. Click “Analyze (OCR + AI)” to run detection.</em></p>
         {% endif %}
