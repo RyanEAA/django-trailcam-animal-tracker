@@ -47,14 +47,6 @@
         <div class="photo-params">
           <strong>Model parameters:</strong>
           <ul>
-            <li>Species: {{ photo.species.name|default:"Unknown" }}</li>
-            <li>Date/time:
-              {% if photo.date_taken %}
-                {{ photo.date_taken }}{% if photo.time_taken %} {{ photo.time_taken }}{% endif %}
-              {% else %}
-                {{ photo.uploaded_at }}
-              {% endif %}
-            </li>
             <li>Camera ID:
               {% if photo.camera %}
                 {{ photo.camera.name }}
@@ -62,6 +54,15 @@
                 Unknown
               {% endif %}
             </li>
+
+            <li>Date/time:
+              {% if photo.date_taken %}
+                {{ photo.date_taken }}{% if photo.time_taken %} {{ photo.time_taken }}{% endif %}
+              {% else %}
+                {{ photo.uploaded_at }}
+              {% endif %}
+            </li>
+
             <li>Temperature:
               {% if photo.temperature %}
                 {{ photo.temperature }}&deg;C
