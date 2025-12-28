@@ -395,6 +395,16 @@ body{
   pointer-events: none; /* don't block clicks on underlying controls */
 }
 
+/* Show detection boxes only when wrapper has show-boxes class AND box is not hidden */
+.photo-wrapper.show-boxes .det-box:not(.det-box-hidden) {
+  display: block;
+}
+
+/* Hide individual detection boxes */
+.det-box.det-box-hidden {
+  display: none !important;
+}
+
 /* Black out person detections for privacy */
 .det-box-person {
   background: #000;

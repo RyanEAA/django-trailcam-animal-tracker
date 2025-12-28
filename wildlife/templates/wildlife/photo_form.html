@@ -192,10 +192,14 @@
             const detectionId = this.getAttribute('data-detection-id');
             const isShown = this.checked;
             
-            // Toggle bounding box visibility immediately
+            // Toggle bounding box visibility by adding/removing class
             const detBox = document.querySelector(`.det-box[data-detection-id="${detectionId}"]`);
             if (detBox) {
-              detBox.style.display = isShown ? '' : 'none';
+              if (isShown) {
+                detBox.classList.remove('det-box-hidden');
+              } else {
+                detBox.classList.add('det-box-hidden');
+              }
             }
             
             // Save to database
