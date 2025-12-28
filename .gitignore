@@ -8,3 +8,6 @@
 
 # But keep the folder itself when a .gitkeep file is present
 !/media/.gitkeep
+
+# ignore database files
+*.sqlite3
