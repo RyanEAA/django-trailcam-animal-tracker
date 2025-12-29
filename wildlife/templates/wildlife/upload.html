@@ -29,6 +29,15 @@
          accept="image/*"
          style="display:none;">
 
+    <!-- Optional: select a whole folder of images -->
+    <input id="folder-input"
+      type="file"
+      name="images"
+      multiple
+      webkitdirectory
+      directory
+      style="display:none;">
+
   <div id="dropzone"
        style="border: 2px dashed #ccc;
               border-radius: 12px;
@@ -38,6 +47,9 @@
               max-width: 900px;">
     <p style="margin:0;">
       Drag &amp; drop images here, or click to select files.
+    </p>
+    <p style="margin:8px 0 0 0; color:#666;">
+      Or <button type="button" id="select-folder-btn" class="btn" style="padding:4px 8px;">Select a Folder</button>
     </p>
   </div>
 
@@ -59,6 +71,20 @@
       Upload Photos
     </button>
   </p>
+
+  <!-- Progress bar (hidden until upload starts) -->
+  <div id="progress-container" style="display:none; margin-top:14px;">
+    <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+      <span><strong>Processing:</strong></span>
+      <span id="progress-text">0/0</span>
+    </div>
+    <div style="background:#e0e0e0; border-radius:8px; height:24px; overflow:hidden;">
+      <div id="progress-bar" 
+           style="background:#2c6bed; height:100%; width:0%; transition:width 0.3s ease; display:flex; align-items:center; justify-content:center;">
+        <span id="progress-percent" style="color:#fff; font-size:12px; font-weight:bold;"></span>
+      </div>
+    </div>
+  </div>
 </form>
 
 <hr style="margin: 28px 0;">
@@ -176,6 +202,8 @@
   document.addEventListener("DOMContentLoaded", () => {
     const dropzone = document.getElementById("dropzone");
     const fileInput = document.getElementById("file-input");
+    const folderInput = document.getElementById("folder-input");
+    const selectFolderBtn = document.getElementById("select-folder-btn");
     const fileInfo = document.getElementById("file-info");
     const filePreviews = document.getElementById("file-previews");
     const uploadBtn = document.getElementById("upload-btn");
@@ -211,9 +239,20 @@
       return card;
     }
 
+    function getAllSelectedFiles() {
+      const list = [];
+      if (fileInput && fileInput.files) {
+        for (const f of fileInput.files) list.push(f);
+      }
+      if (folderInput && folderInput.files) {
+        for (const f of folderInput.files) list.push(f);
+      }
+      return list;
+    }
+
     function updateUI() {
-      const files = fileInput.files;
-      const hasFiles = files && files.length > 0;
+      const files = getAllSelectedFiles();
+      const hasFiles = files.length > 0;
 
       if (fileInfo) fileInfo.style.display = hasFiles ? "block" : "none";
       if (uploadBtn) uploadBtn.disabled = !hasFiles;
@@ -221,7 +260,7 @@
       if (filePreviews) {
         filePreviews.innerHTML = "";
         if (hasFiles) {
-          Array.from(files).forEach((f) => filePreviews.appendChild(createPreviewCard(f)));
+          files.forEach((f) => filePreviews.appendChild(createPreviewCard(f)));
         }
       }
     }
@@ -230,6 +269,14 @@
     dropzone.addEventListener("click", () => {
       fileInput.click();
     });
+
+    // Select Folder button → open directory picker
+    if (selectFolderBtn && folderInput) {
+      selectFolderBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        folderInput.click();
+      });
+    }
 
     // Drag styling + allow drop
     ["dragenter", "dragover"].forEach((evt) => {
@@ -262,8 +309,95 @@
 
     // File picker selection → update UI
     fileInput.addEventListener("change", updateUI);
+    if (folderInput) {
+      folderInput.addEventListener("change", updateUI);
+    }
+
+    // Handle form submission with progress tracking
+    const uploadFormElement = document.getElementById("upload-form");
+    const uploadBtnElement = document.getElementById("upload-btn");
+    const progressContainer = document.getElementById("progress-container");
+    const progressBar = document.getElementById("progress-bar");
+    const progressText = document.getElementById("progress-text");
+    const progressPercent = document.getElementById("progress-percent");
+
+    if (uploadFormElement) {
+      uploadFormElement.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        // Get all selected files
+        const files = [];
+        if (fileInput && fileInput.files) {
+          for (const f of fileInput.files) files.push(f);
+        }
+        if (folderInput && folderInput.files) {
+          for (const f of folderInput.files) files.push(f);
+        }
+
+        if (files.length === 0) {
+          alert("No files selected");
+          return;
+        }
+
+        // Show progress bar
+        progressContainer.style.display = "block";
+        uploadBtnElement.disabled = true;
+        dropzone.style.pointerEvents = "none";
+        dropzone.style.opacity = "0.6";
+
+        let processedCount = 0;
+        let hasError = false;
+
+        // Upload files one at a time to get real progress updates
+        for (const file of files) {
+          if (hasError) break;
+
+          const formData = new FormData();
+          formData.append("images", file);
+
+          try {
+            const response = await fetch(uploadFormElement.action || "", {
+              method: "POST",
+              body: formData,
+              headers: {
+                "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]").value,
+              },
+            });
+
+            if (response.ok) {
+              processedCount++;
+              // Update progress in real-time as each file completes
+              const percent = Math.round((processedCount / files.length) * 100);
+              progressBar.style.width = percent + "%";
+              progressPercent.textContent = percent + "%";
+              progressText.textContent = `${processedCount}/${files.length}`;
+            } else {
+              console.error(`Failed to upload ${file.name}: ${response.statusText}`);
+              hasError = true;
+            }
+          } catch (error) {
+            console.error(`Upload error for ${file.name}:`, error);
+            hasError = true;
+          }
+        }
+
+        if (!hasError && processedCount === files.length) {
+          // All files processed successfully
+          setTimeout(() => {
+            window.location.reload();
+          }, 500);
+        } else {
+          alert("Upload completed with errors. Check the console for details.");
+          progressContainer.style.display = "none";
+          uploadBtnElement.disabled = false;
+          dropzone.style.pointerEvents = "auto";
+          dropzone.style.opacity = "1";
+        }
+      });
+    }
   });
   window.CAMERA_NAMES = {{ camera_names|safe }};
+
 
 </script>
 {% endblock %}

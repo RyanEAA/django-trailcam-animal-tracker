@@ -195,9 +195,18 @@ def upload_photos(request):
             trailcam_path = Path(settings.MEDIA_ROOT) / "trailcam"
             trailcam_path.mkdir(parents=True, exist_ok=True)
             
-            # Process each uploaded file
+            # Process each uploaded file (filter to images only)
+            allowed_exts = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tif", ".tiff"}
+            skipped_non_images = []
             for uploaded_file in files:
                 try:
+                    # Skip non-images based on content type or extension
+                    suffix = Path(uploaded_file.name).suffix.lower()
+                    content_type = getattr(uploaded_file, "content_type", "") or ""
+                    if not (content_type.startswith("image/") or suffix in allowed_exts):
+                        skipped_non_images.append(uploaded_file.name)
+                        continue
+
                     # 1. Save to speciesnet_inbox temporarily
                     inbox_file_path = inbox_path / uploaded_file.name
                     with open(inbox_file_path, 'wb+') as destination:
@@ -293,6 +302,12 @@ def upload_photos(request):
                             inbox_file_path.unlink()
                     except:
                         pass
+            # If we skipped files, append a note
+            if skipped_non_images:
+                skip_msg = f"Skipped non-image files: {', '.join(skipped_non_images[:5])}"
+                if len(skipped_non_images) > 5:
+                    skip_msg += f" +{len(skipped_non_images)-5} more"
+                error = (error + "\n" + skip_msg) if error else skip_msg
             
             if not error:
                 return redirect("wildlife:upload_photos")
@@ -394,6 +409,15 @@ def publish_photo(request, pk):
     require_researcher(request.user)
     photo = get_object_or_404(Photo, pk=pk)
 
+
+    # If the publish came from the edit form, save latest changes first.
+    try:
+        form = PhotoEditForm(request.POST, instance=photo)
+        if form.is_valid():
+            form.save()
+    except Exception:
+        # If not from edit form or validation fails, continue with existing values
+        pass
 
     if photo.date_taken is None or photo.time_taken is None or photo.temperature is None or photo.pressure is None:
         return HttpResponseForbidden("Photo must be analyzed before publishing.")
@@ -693,7 +717,8 @@ def photo_edit(request, pk):
         form = PhotoEditForm(request.POST, instance=photo)
         if form.is_valid():
             form.save()
-            return redirect("wildlife:upload_photos")
+            # Reload the same edit page instead of sending to upload
+            return redirect("wildlife:photo_edit", pk=pk)
     else:
         form = PhotoEditForm(instance=photo)
 

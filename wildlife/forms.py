@@ -27,7 +27,6 @@ class PhotoEditForm(forms.ModelForm):
             "pressure",
             "latitude",
             "longitude",
-            "is_published",
         ]
 
 

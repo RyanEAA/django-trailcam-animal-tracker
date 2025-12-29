@@ -38,7 +38,7 @@
 
       <!-- PHOTO EDIT / READ-ONLY FORM -->
       {% if not read_only %}
-      <form method="post">
+      <form method="post" id="photo-edit-form">
         {% csrf_token %}
         <table>
           {{ form.as_table }}
@@ -63,10 +63,8 @@
           </form>
 
           {% if photo.date_taken and photo.time_taken and photo.temperature is not None and photo.pressure is not None %}
-            <form method="post" action="{% url 'wildlife:publish_photo' photo.id %}">
-              {% csrf_token %}
-              <button class="btn btn-primary" type="submit">Publish</button>
-            </form>
+              <!-- Publish submits the edit form’s current values to publish endpoint -->
+              <button class="btn btn-primary" type="submit" form="photo-edit-form" formaction="{% url 'wildlife:publish_photo' photo.id %}">Publish</button>
           {% endif %}
 
           <form method="post" action="{% url 'wildlife:delete_photo_staging' photo.id %}">

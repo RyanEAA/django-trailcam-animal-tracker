@@ -5,6 +5,88 @@
 {% block content %}
 <h1>Public Gallery</h1>
 
+<!-- FILTER SECTION -->
+<div style="background:#f9f9f9; border:1px solid #ddd; border-radius:8px; padding:16px; margin-bottom:20px;">
+  <h3 style="margin-top:0; margin-bottom:12px;">Filters</h3>
+  
+  <form method="get" action="{% url 'wildlife:gallery' %}" style="display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;">
+    
+    <!-- Camera Filter -->
+    <div>
+      <label style="display:block; margin-bottom:4px; font-weight:600; font-size:0.9em;">Camera</label>
+      <select name="camera" style="padding:6px 8px; border:1px solid #ccc; border-radius:4px;">
+        <option value="">All cameras</option>
+        {% for camera in camera_options %}
+          <option value="{{ camera.id }}" {% if camera.id|stringformat:"s" == selected_camera_id %}selected{% endif %}>
+            {{ camera.name }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Date Range Filter -->
+    <div>
+      <label style="display:block; margin-bottom:4px; font-weight:600; font-size:0.9em;">Start Date</label>
+      <input type="date" name="start_date" value="{{ start_date }}" style="padding:6px 8px; border:1px solid #ccc; border-radius:4px;">
+    </div>
+
+    <div>
+      <label style="display:block; margin-bottom:4px; font-weight:600; font-size:0.9em;">End Date</label>
+      <input type="date" name="end_date" value="{{ end_date }}" style="padding:6px 8px; border:1px solid #ccc; border-radius:4px;">
+    </div>
+
+    <!-- Temperature Range Filter -->
+    <div>
+      <label style="display:block; margin-bottom:4px; font-weight:600; font-size:0.9em;">Min Temp (°C)</label>
+      <input type="number" name="temp_min" value="{{ temp_min }}" step="0.1" style="padding:6px 8px; border:1px solid #ccc; border-radius:4px; width:100px;">
+    </div>
+
+    <div>
+      <label style="display:block; margin-bottom:4px; font-weight:600; font-size:0.9em;">Max Temp (°C)</label>
+      <input type="number" name="temp_max" value="{{ temp_max }}" step="0.1" style="padding:6px 8px; border:1px solid #ccc; border-radius:4px; width:100px;">
+    </div>
+
+    <!-- Pressure Range Filter -->
+    <div>
+      <label style="display:block; margin-bottom:4px; font-weight:600; font-size:0.9em;">Min Pressure (inHg)</label>
+      <input type="number" name="pressure_min" value="{{ pressure_min }}" step="0.01" style="padding:6px 8px; border:1px solid #ccc; border-radius:4px; width:100px;">
+    </div>
+
+    <div>
+      <label style="display:block; margin-bottom:4px; font-weight:600; font-size:0.9em;">Max Pressure (inHg)</label>
+      <input type="number" name="pressure_max" value="{{ pressure_max }}" step="0.01" style="padding:6px 8px; border:1px solid #ccc; border-radius:4px; width:100px;">
+    </div>
+
+    <button type="submit" class="btn btn-primary" style="margin-top:22px;">Apply Filters</button>
+  </form>
+
+  <!-- Species Filter (Checkboxes) -->
+  {% if species_options %}
+    <div style="margin-top:12px;">
+      <div style="font-weight:600; font-size:0.9em; margin-bottom:8px;">Species</div>
+      <form method="get" action="{% url 'wildlife:gallery' %}" style="display:flex; flex-wrap:wrap; gap:12px; padding:8px 0;">
+        <!-- Hidden inputs to preserve other filters -->
+        <input type="hidden" name="camera" value="{{ selected_camera_id }}">
+        <input type="hidden" name="start_date" value="{{ start_date }}">
+        <input type="hidden" name="end_date" value="{{ end_date }}">
+        <input type="hidden" name="temp_min" value="{{ temp_min }}">
+        <input type="hidden" name="temp_max" value="{{ temp_max }}">
+        <input type="hidden" name="pressure_min" value="{{ pressure_min }}">
+        <input type="hidden" name="pressure_max" value="{{ pressure_max }}">
+
+        {% for species in species_options %}
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+            <input type="checkbox" name="species" value="{{ species.id }}" 
+              {% if species.id|stringformat:"s" in selected_species_ids %}checked{% endif %}
+              onchange="this.form.submit();">
+            {{ species.name }}
+          </label>
+        {% endfor %}
+      </form>
+    </div>
+  {% endif %}
+</div>
+
 <div style="margin: 10px 0 18px 0;">
   <button id="toggle-params-btn" class="btn" type="button">
     Hide details
