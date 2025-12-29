@@ -4,6 +4,8 @@ import os
 import re
 import csv
 import shutil
+import json
+import random
 from pathlib import Path
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -80,6 +82,7 @@ def gallery(request):
     
     # Build detection boxes for each photo
     photos_with_boxes = []
+    photo_locations = []  # For map markers
     for photo in qs:
         detection_boxes = []
         for det in photo.detections.filter(is_shown=True):
@@ -98,9 +101,25 @@ def gallery(request):
             "photo": photo,
             "detection_boxes": detection_boxes,
         })
+        
+        # Collect coordinates for map markers
+        if photo.latitude and photo.longitude:
+            # Add small random noise to obscure exact camera location
+            # ~0.001 degrees is approximately 100 meters
+            noise_lat = random.uniform(-0.001, 0.001)
+            noise_lng = random.uniform(-0.001, 0.001)
+            
+            photo_locations.append({
+                "id": photo.id,
+                "lat": float(photo.latitude) + noise_lat,
+                "lng": float(photo.longitude) + noise_lng,
+                "camera": photo.camera.name if photo.camera else "Unknown",
+                "date": photo.date_taken.strftime("%Y-%m-%d") if photo.date_taken else "Unknown",
+            })
 
     context = {
         "photos_with_boxes": photos_with_boxes,
+        "photo_locations": json.dumps(photo_locations),
         "species_options": Species.objects.all().order_by("name"),
         "camera_options": Camera.objects.all().order_by("name"),
         "selected_species_ids": list(map(str, species_ids)),

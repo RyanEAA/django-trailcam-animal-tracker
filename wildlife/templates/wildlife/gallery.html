@@ -3,10 +3,76 @@
 {% block title %}Gallery{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+  .split-container {
+    display: flex;
+    height: calc(100vh - 200px);
+    min-height: 600px;
+    gap: 0;
+    position: relative;
+  }
+  
+  .photo-card.highlighted {
+    outline: 3px solid #007bff;
+    outline-offset: 2px;
+    box-shadow: 0 0 20px rgba(0, 123, 255, 0.5);
+    transition: all 0.3s ease;
+  }
+  
+  .map-panel {
+    flex: 0 0 40%;
+    min-width: 200px;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  #map {
+    width: 100%;
+    height: 100%;
+  }
+  
+  .divider {
+    flex: 0 0 4px;
+    background: #ddd;
+    cursor: col-resize;
+    position: relative;
+    transition: background 0.2s;
+  }
+  
+  .divider:hover {
+    background: #999;
+  }
+  
+  .divider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 40px;
+    background: inherit;
+    border-radius: 10px;
+  }
+  
+  .gallery-panel {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 20px;
+  }
+  
+  .filter-section {
+    margin-bottom: 20px;
+  }
+</style>
+
 <h1>Public Gallery</h1>
 
 <!-- FILTER SECTION -->
-<div style="background:#f9f9f9; border:1px solid #ddd; border-radius:8px; padding:16px; margin-bottom:20px;">
+<div class="filter-section" style="background:#f9f9f9; border:1px solid #ddd; border-radius:8px; padding:16px; margin-bottom:20px;">
   <h3 style="margin-top:0; margin-bottom:12px;">Filters</h3>
   
   <form method="get" action="{% url 'wildlife:gallery' %}" style="display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;">
@@ -113,74 +179,179 @@
   });
 </script>
 
-{% if photos_with_boxes %}
-  <div style="display:flex; flex-wrap:wrap; gap:16px;">
-    {% for item in photos_with_boxes %}
-      {% with photo=item.photo %}
-      <div class="photo-card is-clickable"
-           data-edit-url="{% url 'wildlife:photo_detail' photo.id %}">
-        <div class="photo-title">
-          {{ photo.image.name|default:"Photo" }}
-        </div>
+<!-- Split container with map and gallery -->
+<div class="split-container">
+  <!-- Gallery Panel -->
+  <div class="gallery-panel">
+    {% if photos_with_boxes %}
+      <div style="display:flex; flex-wrap:wrap; gap:16px;">
+        {% for item in photos_with_boxes %}
+          {% with photo=item.photo %}
+          <div class="photo-card is-clickable"
+               data-photo-id="{{ photo.id }}"
+               data-edit-url="{% url 'wildlife:photo_detail' photo.id %}">
+            <div class="photo-title">
+              {{ photo.image.name|default:"Photo" }}
+            </div>
 
-        {% if photo.image %}
-          <div class="photo-wrapper show-boxes">
-            <img src="{{ photo.image.url }}" class="photo-zoom" alt="photo {{ photo.id }}">
-            {% for box in item.detection_boxes %}
-              <div class="det-box{% if box.is_person %} det-box-person{% endif %}"
-                   style="
-                     left: {{ box.left }}%;
-                     top: {{ box.top }}%;
-                     width: {{ box.width }}%;
-                     height: {{ box.height }}%;
-                   ">
+            {% if photo.image %}
+              <div class="photo-wrapper show-boxes">
+                <img src="{{ photo.image.url }}" class="photo-zoom" alt="photo {{ photo.id }}">
+                {% for box in item.detection_boxes %}
+                  <div class="det-box{% if box.is_person %} det-box-person{% endif %}"
+                       style="
+                         left: {{ box.left }}%;
+                         top: {{ box.top }}%;
+                         width: {{ box.width }}%;
+                         height: {{ box.height }}%;
+                       ">
+                  </div>
+                {% endfor %}
               </div>
-            {% endfor %}
+            {% endif %}
+
+            <div class="photo-params">
+              <strong>Model parameters:</strong>
+              <ul>
+                <li>Camera ID:
+                  {% if photo.camera %}
+                    {{ photo.camera.name }}
+                  {% else %}
+                    Unknown
+                  {% endif %}
+                </li>
+
+                <li>Date/time:
+                  {% if photo.date_taken %}
+                    {{ photo.date_taken }}{% if photo.time_taken %} {{ photo.time_taken }}{% endif %}
+                  {% else %}
+                    {{ photo.uploaded_at }}
+                  {% endif %}
+                </li>
+
+                <li>Temperature:
+                  {% if photo.temperature %}
+                    {{ photo.temperature }}&deg;C
+                  {% else %}
+                    —
+                  {% endif %}
+                </li>
+                <li>Pressure:
+                  {% if photo.pressure %}
+                    {{ photo.pressure }} inHg
+                  {% else %}
+                    —
+                  {% endif %}
+                </li>
+              </ul>
+            </div>
+
+            {# Unpublish handled on the card detail page for researchers. #}
           </div>
-        {% endif %}
-
-        <div class="photo-params">
-          <strong>Model parameters:</strong>
-          <ul>
-            <li>Camera ID:
-              {% if photo.camera %}
-                {{ photo.camera.name }}
-              {% else %}
-                Unknown
-              {% endif %}
-            </li>
-
-            <li>Date/time:
-              {% if photo.date_taken %}
-                {{ photo.date_taken }}{% if photo.time_taken %} {{ photo.time_taken }}{% endif %}
-              {% else %}
-                {{ photo.uploaded_at }}
-              {% endif %}
-            </li>
-
-            <li>Temperature:
-              {% if photo.temperature %}
-                {{ photo.temperature }}&deg;C
-              {% else %}
-                —
-              {% endif %}
-            </li>
-            <li>Pressure:
-              {% if photo.pressure %}
-                {{ photo.pressure }} inHg
-              {% else %}
-                —
-              {% endif %}
-            </li>
-          </ul>
-        </div>
-
-        {# Unpublish handled on the card detail page for researchers. #}
+          {% endwith %}
+        {% endfor %}
       </div>
-      {% endwith %}
-    {% endfor %}
+    {% else %}
+      <p>No photos yet.</p>
+    {% endif %}
   </div>
-{% else %}
-  <p>No photos yet.</p>
-{% endif %}
+  
+  <!-- Resizable Divider -->
+  <div class="divider" id="divider"></div>
+  
+  <!-- Map Panel -->
+  <div class="map-panel">
+    <div id="map"></div>
+  </div>
+</div>
+
+<script>
+  // Initialize map
+  var map = L.map('map').setView([30.2672, -97.7431], 10); // Default Austin, TX
+  
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19
+  }).addTo(map);
+  
+  // Add markers for photos
+  var photoLocations = {{ photo_locations|safe }};
+  
+  if (photoLocations && photoLocations.length > 0) {
+    var bounds = [];
+    
+    photoLocations.forEach(function(location) {
+      var marker = L.marker([location.lat, location.lng]).addTo(map);
+      
+      marker.bindPopup(
+        '<strong>Camera:</strong> ' + location.camera + '<br>' +
+        '<strong>Date:</strong> ' + location.date
+      );
+      
+      // Highlight photo card when marker is clicked
+      marker.on('click', function() {
+        // Remove previous highlights
+        document.querySelectorAll('.photo-card.highlighted').forEach(function(card) {
+          card.classList.remove('highlighted');
+        });
+        
+        // Find and highlight the corresponding photo card
+        var photoCard = document.querySelector('.photo-card[data-photo-id="' + location.id + '"]');
+        if (photoCard) {
+          photoCard.classList.add('highlighted');
+          // Scroll to the photo card
+          photoCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      });
+      
+      bounds.push([location.lat, location.lng]);
+    });
+    
+    // Fit map to show all markers
+    if (bounds.length > 0) {
+      map.fitBounds(bounds, { padding: [50, 50] });
+    }
+  }
+  
+  // Resizable divider functionality
+  var divider = document.getElementById('divider');
+  var mapPanel = document.querySelector('.map-panel');
+  var container = document.querySelector('.split-container');
+  var isResizing = false;
+  
+  divider.addEventListener('mousedown', function(e) {
+    isResizing = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+  
+  document.addEventListener('mousemove', function(e) {
+    if (!isResizing) return;
+    
+    var containerRect = container.getBoundingClientRect();
+    var newWidth = e.clientX - containerRect.left;
+    var percentage = (newWidth / containerRect.width) * 100;
+    
+    // Keep between 20% and 80%
+    if (percentage >= 20 && percentage <= 80) {
+      // Map is on the right, so invert the percentage
+      mapPanel.style.flex = '0 0 ' + (100 - percentage) + '%';
+      map.invalidateSize(); // Refresh map after resize
+    }
+  });
+  
+  document.addEventListener('mouseup', function() {
+    if (isResizing) {
+      isResizing = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+  });
+  
+  // Ensure map renders properly after page load
+  setTimeout(function() {
+    map.invalidateSize();
+  }, 100);
+</script>
+
 {% endblock %}
