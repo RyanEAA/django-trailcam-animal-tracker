@@ -16,7 +16,7 @@ This project is designed to support **teams of researchers** working together to
 * **Researchers**
 
   * Upload trailcam images
-  * Analyze images using OCR
+  * Analyze images using OCR + SpeciesNet detections
   * Edit metadata inline
   * Publish / unpublish images
   * Collaborate in a shared staging area
@@ -40,9 +40,9 @@ This workflow ensures **data quality, collaboration, and accountability**.
 
 ---
 
-### 🧠 OCR-Based Metadata Extraction
+### 🧠 OCR + AI (SpeciesNet) Analysis
 
-When a researcher clicks **Analyze**, the system:
+When images are uploaded (or a researcher clicks **Analyze**), the system:
 
 1. Crops the bottom overlay of the trailcam image
 2. Applies OCR (Tesseract)
@@ -54,8 +54,11 @@ When a researcher clicks **Analyze**, the system:
    * Pressure (inHg)
 4. Normalizes common OCR errors:
    * 0, Q, D -> 0 in a camera number
-5. Automatically Attaches Camera if it exists
-5. Saves parsed metadata to the database
+5. Automatically attaches/creates Camera (defaults to St. Edward's Univ. coords on create)
+6. Runs **SpeciesNet** on the image to detect animals/people/vehicles and stores detections with normalized bounding boxes (0..1)
+7. Saves parsed metadata and detections to the database
+
+Privacy: when a photo is published, any detection classified as a person is permanently blacked out in the saved image.
 
 Researchers can then **review and edit** extracted values before publishing.
 
@@ -75,30 +78,30 @@ Each camera includes:
     * is_active
 
 **Camera Actions**
-    * Create cameras via modal
-    * Edit camera metadata via modal
+  * Create cameras via a page-based form
+  * Edit camera metadata via a page-based form
     * Activate / deactivate cameras
     * Search cameras by name or description
 
 **OCR Integration**
     * OCR-extracted camera IDs are normalized (e.g. TRAILCAMQ5 → TRAILCAM05)
     * If a matching active camera exists, it is automatically linked
-    * If not, researchers are prompted to create the camera first
+    * If not, a camera is created automatically using normalized name and default coordinates
     * This ensures consistent camera IDs and location metadata across the dataset.
 
 ---
 
-### 📝 Inline Metadata Editing (Modal Editor)
+### 📝 Page-based Metadata Editing
 
-* Clicking a photo card opens a **modal editor**
+* Clicking Edit opens a **page-based editor**
 * Metadata fields use appropriate controls:
 
   * Camera → text input with suggestions
   * Date → date picker
   * Time → time picker
   * Temperature / Pressure → numeric inputs with validation
-* A **Save** button appears only when changes are made
-* Successful saves close the modal automatically
+* A **Save** button persists edits and reloads the editor
+* A **Publish** button saves the current edits and publishes in one step (also applies person blackout)
 
 ---
 
@@ -106,7 +109,8 @@ Each camera includes:
 
 * Clean, card-based UI
 * Optional toggle to hide/show metadata
-* Hover and modal interactions for better image inspection
+* Bounding boxes are rendered on images; people are blacked out
+* Filter bar with Camera, Date range, Temperature range, Pressure range, and Species (checkboxes)
 * Public gallery shows **only published images**
 
 ---
@@ -118,6 +122,7 @@ Each camera includes:
 | Backend          | Django                         |
 | Frontend         | Django Templates + Vanilla JS  |
 | OCR              | Tesseract (via `pytesseract`)  |
+| AI Detection     | SpeciesNet (local JSON model)  |
 | Image Processing | Pillow                         |
 | Database         | SQLite (dev), easily swappable |
 | Auth             | Django Auth                    |
@@ -145,6 +150,8 @@ django-trailcam-animal-tracker/
 │   └── utils/
 │       ├── ocr.py         # OCR + regex parsing logic
 │       └── utils.py       # Shared helpers
+│   └── services/
+│       └── speciesnet.py  # SpeciesNet detection pipeline + persistence
 │
 ├── media/                 # Uploaded images
 └── manage.py
@@ -156,26 +163,28 @@ django-trailcam-animal-tracker/
 
 ### 1️⃣ Upload & Staging
 
-1. Researcher uploads images
-2. Images appear in `/upload` (staging)
-3. Images are **not public**
+1. Researcher uploads images (single files or entire folders)
+2. Client shows a **progress bar** updating as each image is processed server-side
+3. Server runs OCR + SpeciesNet during upload
+4. Images appear in `/upload` (staging) and are **not public**
 
 ---
 
 ### 2️⃣ Analysis
 
-1. Researcher clicks **Analyze**
-2. OCR extracts metadata
+1. Researcher can click **Analyze** to re-run OCR + SpeciesNet on a single staging photo
+2. OCR extracts metadata; SpeciesNet produces detections and bounding boxes
 3. Results are stored and displayed
-4. Researchers can edit metadata inline
+4. Researchers can edit metadata in the page-based editor
 
 ---
 
 ### 3️⃣ Publishing
 
 1. Image must have valid metadata
-2. Researcher clicks **Publish**
-3. Image becomes visible in `/gallery`
+2. Researcher clicks **Publish** (saves current edits automatically)
+3. Any person detections are permanently blacked out in the image file
+4. Image becomes visible in `/gallery`
 
 ---
 
@@ -202,8 +211,14 @@ django-trailcam-animal-tracker/
 
 ### Install dependencies
 
+Use a virtual environment and install from `requirements.txt`:
+
 ```bash
-pip install django pillow pytesseract
+python -m venv .venv
+source .venv/bin/activate  # macOS/Linux
+# .venv\Scripts\activate  # Windows PowerShell
+
+pip install -r requirements.txt
 ```
 
 ### Install Tesseract (macOS)
@@ -218,6 +233,8 @@ brew install tesseract
 python manage.py migrate
 python manage.py runserver
 ```
+
+Optional: ensure `speciesnet.json` exists at the project root (or configured path) if required by `services/speciesnet.py`.
 
 ---
 
