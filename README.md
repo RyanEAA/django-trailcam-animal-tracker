@@ -454,8 +454,16 @@ erDiagram
     ✅ Shared staging workflow
     ✅ Modal-based metadata editing
     ✅ Camera CRUD + OCR integration
-    🔒 Open-state (lock) enforcement for photos & cameras
-    🐾 Animal detection & classification
-    🗺️ Map-based sightings view
-    📊 Public activity log
+    ✅ Animal detection & classification
+    ✅ Map-based sightings view
+    📊 Excel information Extraction
     🚀 Deployment & background processing
+
+
+## 🏙️ Images
+
+<img width="1878" height="831" alt="Screenshot 2025-12-29 at 8 30 27 PM" src="https://github.com/user-attachments/assets/c076ccf5-f7c1-41c8-afea-3ecfb2bb497f" />
+Public gallery view, where you can filter images, and view locaiton of images on map.
+
+<img width="1202" height="571" alt="Screenshot 2025-12-29 at 8 30 40 PM" src="https://github.com/user-attachments/assets/b4f88ae4-7c09-47cc-93be-505df5e07778" />
+Detailed researcher view of images.
