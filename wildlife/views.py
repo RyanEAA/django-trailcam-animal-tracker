@@ -6,7 +6,7 @@ import csv
 import shutil
 import json
 import random
-from io import BytesIO
+from io import StringIO
 from pathlib import Path
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -27,7 +27,6 @@ from django.core.files import File
 
 from PIL import Image, ImageDraw
 import pytesseract
-import pandas as pd
 
 from .models import Photo, PhotoDetection, Species, Camera
 from .forms import PhotoEditForm, CameraForm
@@ -152,43 +151,59 @@ def gallery_export(request):
     filters = _build_gallery_filters(request)
     qs = _apply_gallery_filters(filters).prefetch_related("detections__species", "camera")
 
-    rows = []
+    header = [
+        "Picture Name",
+        "Animals Detected",
+        "Temperature (°C)",
+        "Pressure (inHg)",
+        "Time",
+        "Date",
+        "Camera",
+        "Image URL",
+        "BBox X",
+        "BBox Y",
+        "BBox W",
+        "BBox H",
+    ]
+
+    buffer = StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(header)
+
     for photo in qs:
         detections = photo.detections.filter(is_shown=True).select_related("species")
+
+        image_url = request.build_absolute_uri(photo.image.url) if photo.image else ""
+
+        def write_row(species_label: str, det):
+            x = det.x if det and det.x is not None else ""
+            y = det.y if det and det.y is not None else ""
+            w = det.w if det and det.w is not None else ""
+            h = det.h if det and det.h is not None else ""
+            writer.writerow([
+                os.path.basename(photo.image.name) if photo.image else f"Photo {photo.id}",
+                species_label,
+                photo.temperature if photo.temperature is not None else "",
+                photo.pressure if photo.pressure is not None else "",
+                photo.time_taken.isoformat() if photo.time_taken else "",
+                photo.date_taken.isoformat() if photo.date_taken else "",
+                photo.camera.name if photo.camera else "",
+                image_url,
+                x,
+                y,
+                w,
+                h,
+            ])
 
         if detections.exists():
             for det in detections:
                 species_name = det.species.name if det.species else (det.get_category_display() or "Unknown")
-                rows.append({
-                    "Picture Name": os.path.basename(photo.image.name) if photo.image else f"Photo {photo.id}",
-                    "Animals Detected": species_name,
-                    "Temperature (°C)": photo.temperature if photo.temperature is not None else "",
-                    "Pressure (inHg)": photo.pressure if photo.pressure is not None else "",
-                    "Time": photo.time_taken.isoformat() if photo.time_taken else "",
-                    "Date": photo.date_taken.isoformat() if photo.date_taken else "",
-                    "Camera": photo.camera.name if photo.camera else "",
-                })
+                write_row(species_name, det)
         else:
-            rows.append({
-                "Picture Name": os.path.basename(photo.image.name) if photo.image else f"Photo {photo.id}",
-                "Animals Detected": "Unknown",
-                "Temperature (°C)": photo.temperature if photo.temperature is not None else "",
-                "Pressure (inHg)": photo.pressure if photo.pressure is not None else "",
-                "Time": photo.time_taken.isoformat() if photo.time_taken else "",
-                "Date": photo.date_taken.isoformat() if photo.date_taken else "",
-                "Camera": photo.camera.name if photo.camera else "",
-            })
+            write_row("Unknown", None)
 
-    df = pd.DataFrame(rows)
-    buffer = BytesIO()
-    df.to_excel(buffer, index=False)
-    buffer.seek(0)
-
-    filename = f"gallery_export_{timezone.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-    response = HttpResponse(
-        buffer.read(),
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+    filename = f"gallery_export_{timezone.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    response = HttpResponse(buffer.getvalue(), content_type="text/csv")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
 
