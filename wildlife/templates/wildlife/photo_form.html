@@ -33,16 +33,87 @@
       {% endif %}
     </div>
 
-    <!-- RIGHT COLUMN: FORM + ACTIONS + AI SUMMARY -->
+    <!-- RIGHT COLUMN -->
     <div style="flex:1;">
 
-      <!-- PHOTO EDIT / READ-ONLY FORM -->
       {% if not read_only %}
       <form method="post" id="photo-edit-form">
         {% csrf_token %}
+
         <table>
           {{ form.as_table }}
         </table>
+
+        <!-- AI DETECTION SUMMARY (MOVED INSIDE FORM so it submits) -->
+        <div style="margin-top:20px;">
+          {% if has_detections %}
+            <p><strong>AI detections:</strong>
+              {% if num_animals %}
+                {{ num_animals }} animal{% if num_animals != 1 %}s{% endif %}
+              {% endif %}
+              {% if num_people %}
+                {% if num_animals %}, {% endif %}
+                {{ num_people }} person{% if num_people != 1 %}s{% endif %}
+              {% endif %}
+              {% if num_vehicles %}
+                {% if num_animals or num_people %}, {% endif %}
+                {{ num_vehicles }} vehicle{% if num_vehicles != 1 %}s{% endif %}
+              {% endif %}
+              .
+            </p>
+
+            {% if detection_boxes %}
+              <div style="margin-top:10px;">
+                <strong>Detection details:</strong>
+
+                <ul style="margin:6px 0 0 0; padding:0; list-style:none;">
+                  {% for box in detection_boxes %}
+                    <li style="margin-bottom:8px; display:flex; align-items:center; gap:8px;">
+                      <input
+                        type="checkbox"
+                        class="detection-visibility-toggle"
+                        name="det_is_shown_{{ box.id }}"
+                        data-detection-id="{{ box.id }}"
+                        {% if box.is_shown %}checked{% endif %}
+                        style="cursor:pointer;"
+                      />
+
+                      <div style="position:relative; flex:0 0 180px;">
+                        <input
+                          type="text"
+                          class="species-name-input"
+                          name="det_species_name_{{ box.id }}"
+                          data-detection-id="{{ box.id }}"
+                          value="{{ box.species_name|default:box.label }}"
+                          style="padding:4px 8px; border:1px solid #ccc; border-radius:4px; width:100%; box-sizing:border-box;"
+                          placeholder="Species name"
+                          autocomplete="off"
+                        />
+                        <ul class="species-suggestions"
+                            data-detection-id="{{ box.id }}"
+                            style="position:absolute; top:100%; left:0; right:0; margin:0; padding:0; list-style:none; background:white; border:1px solid #ddd; border-top:none; border-radius:0 0 4px 4px; display:none; max-height:150px; overflow-y:auto; z-index:10;">
+                        </ul>
+                      </div>
+
+                      <span style="color:#666; font-size:0.9em;">
+                        conf {{ box.confidence|floatformat:2 }}
+                        {% if box.bbox_tuple %}
+                          (x {{ box.bbox_tuple.0|floatformat:1 }}%, y {{ box.bbox_tuple.1|floatformat:1 }}%, w {{ box.bbox_tuple.2|floatformat:1 }}%, h {{ box.bbox_tuple.3|floatformat:1 }}%)
+                        {% endif %}
+                      </span>
+                    </li>
+                  {% endfor %}
+                </ul>
+
+                <p style="margin-top:8px; color:#777; font-size:0.9em;">
+                  Changes here save only when you click the main “Save” button below.
+                </p>
+              </div>
+            {% endif %}
+          {% else %}
+            <p><em>No AI detections yet. Click “Analyze (OCR + AI)” to run detection.</em></p>
+          {% endif %}
+        </div>
 
         <div style="margin-top:12px;">
           <button class="btn btn-primary" type="submit">Save</button>
@@ -52,6 +123,20 @@
         <table>
           {{ form.as_table }}
         </table>
+
+        <!-- READ ONLY detection list stays outside (no inputs) -->
+        <div style="margin-top:20px;">
+          {% if has_detections and detection_boxes %}
+            <strong>Detection details:</strong>
+            <ul style="margin:6px 0 0 18px; padding:0; list-style:disc;">
+              {% for box in detection_boxes %}
+                <li>
+                  {{ box.species_name|default:box.label }} — conf {{ box.confidence|floatformat:2 }}
+                </li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        </div>
       {% endif %}
 
       <!-- ACTION BUTTONS -->
@@ -63,106 +148,32 @@
           </form>
 
           {% if photo.date_taken and photo.time_taken and photo.temperature is not None and photo.pressure is not None %}
-              <!-- Publish submits the edit form’s current values to publish endpoint -->
-              <button class="btn btn-primary" type="submit" form="photo-edit-form" formaction="{% url 'wildlife:publish_photo' photo.id %}">Publish</button>
+            <button class="btn btn-primary" type="submit" form="photo-edit-form"
+                    formaction="{% url 'wildlife:publish_photo' photo.id %}">Publish</button>
           {% endif %}
 
           <form method="post" action="{% url 'wildlife:delete_photo_staging' photo.id %}">
             {% csrf_token %}
-            <button class="btn"
-                    type="submit"
+            <button class="btn" type="submit"
                     onclick="return confirm('Delete this unpublished photo? This cannot be undone.');">
               Delete
             </button>
           </form>
 
           {% if has_detections %}
-            <button class="btn" id="toggle-boxes-btn" type="button">
-              Show bounding boxes
-            </button>
+            <button class="btn" id="toggle-boxes-btn" type="button">Show bounding boxes</button>
           {% endif %}
         {% else %}
-          {# Read-only detail view: researchers may unpublish; allow toggling boxes #}
           {% if can_unpublish %}
             <form method="post" action="{% url 'wildlife:unpublish_photo' photo.id %}">
               {% csrf_token %}
-              <button class="btn" type="submit" onclick="return confirm('Unpublish this photo and move it back to staging?');">Unpublish</button>
+              <button class="btn" type="submit"
+                      onclick="return confirm('Unpublish this photo and move it back to staging?');">Unpublish</button>
             </form>
           {% endif %}
-
           {% if has_detections %}
             <button class="btn" id="toggle-boxes-btn" type="button">Show bounding boxes</button>
           {% endif %}
-        {% endif %}
-      </div>
-
-      <!-- AI DETECTION SUMMARY -->
-      <div style="margin-top:20px;">
-        {% if has_detections %}
-          <p><strong>AI detections:</strong>
-            {% if num_animals %}
-              {{ num_animals }} animal{% if num_animals != 1 %}s{% endif %}
-            {% endif %}
-
-            {% if num_people %}
-              {% if num_animals %}, {% endif %}
-              {{ num_people }} person{% if num_people != 1 %}s{% endif %}
-            {% endif %}
-
-            {% if num_vehicles %}
-              {% if num_animals or num_people %}, {% endif %}
-              {{ num_vehicles }} vehicle{% if num_vehicles != 1 %}s{% endif %}
-            {% endif %}
-            .
-          </p>
-
-          {% if detection_boxes %}
-            <div style="margin-top:10px;">
-              <strong>Detection details:</strong>
-              {% if not read_only %}
-                {# Researcher edit mode: checkboxes + editable species names #}
-                <ul style="margin:6px 0 0 0; padding:0; list-style:none;">
-                  {% for box in detection_boxes %}
-                    <li style="margin-bottom:8px; display:flex; align-items:center; gap:8px;">
-                      <input type="checkbox" 
-                             class="detection-visibility-toggle" 
-                             data-detection-id="{{ box.id }}"
-                             {% if box.is_shown %}checked{% endif %}
-                             style="cursor:pointer;">
-                      
-                      <input type="text" 
-                             class="species-name-input" 
-                             data-detection-id="{{ box.id }}"
-                             value="{{ box.species_name|default:box.label }}"
-                             style="padding:4px 8px; border:1px solid #ccc; border-radius:4px; flex:0 0 180px;"
-                             placeholder="Species name">
-                      
-                      <span style="color:#666; font-size:0.9em;">
-                        conf {{ box.confidence|floatformat:2 }}
-                        {% if box.bbox_tuple %}
-                          (x {{ box.bbox_tuple.0|floatformat:1 }}%, y {{ box.bbox_tuple.1|floatformat:1 }}%, w {{ box.bbox_tuple.2|floatformat:1 }}%, h {{ box.bbox_tuple.3|floatformat:1 }}%)
-                        {% endif %}
-                      </span>
-                    </li>
-                  {% endfor %}
-                </ul>
-              {% else %}
-                {# Read-only public view: simple bullet list #}
-                <ul style="margin:6px 0 0 18px; padding:0; list-style:disc;">
-                  {% for box in detection_boxes %}
-                    <li>
-                      {{ box.species_name|default:box.label }} — conf {{ box.confidence|floatformat:2 }}
-                      {% if box.bbox_tuple %}
-                        (x {{ box.bbox_tuple.0|floatformat:1 }}%, y {{ box.bbox_tuple.1|floatformat:1 }}%, w {{ box.bbox_tuple.2|floatformat:1 }}%, h {{ box.bbox_tuple.3|floatformat:1 }}%)
-                      {% endif %}
-                    </li>
-                  {% endfor %}
-                </ul>
-              {% endif %}
-            </div>
-          {% endif %}
-        {% else %}
-          <p><em>No AI detections yet. Click “Analyze (OCR + AI)” to run detection.</em></p>
         {% endif %}
       </div>
 
@@ -174,8 +185,8 @@
       document.addEventListener('DOMContentLoaded', function () {
         const wrapper = document.getElementById('photo-wrapper');
         const btn = document.getElementById('toggle-boxes-btn');
-        
-        // Toggle all boxes visibility button
+
+        // Toggle all boxes visibility
         if (wrapper && btn) {
           btn.addEventListener('click', function () {
             const showing = wrapper.classList.toggle('show-boxes');
@@ -183,108 +194,84 @@
           });
         }
 
-        // Individual detection visibility toggles
+        // Visibility toggles: UI-only (NO saving)
         const visibilityToggles = document.querySelectorAll('.detection-visibility-toggle');
         visibilityToggles.forEach(checkbox => {
           checkbox.addEventListener('change', function() {
             const detectionId = this.getAttribute('data-detection-id');
             const isShown = this.checked;
-            
-            // Toggle bounding box visibility by adding/removing class
+
             const detBox = document.querySelector(`.det-box[data-detection-id="${detectionId}"]`);
             if (detBox) {
-              if (isShown) {
-                detBox.classList.remove('det-box-hidden');
-              } else {
-                detBox.classList.add('det-box-hidden');
-              }
+              detBox.classList.toggle('det-box-hidden', !isShown);
             }
-            
-            // Save to database
-            fetch(`/detection/${detectionId}/update-species/`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-CSRFToken': getCookie('csrftoken')
-              },
-              body: `is_shown=${isShown}`
-            })
-            .then(response => response.json())
-            .then(data => {
-              if (!data.success) {
-                console.error('Failed to update detection visibility');
-              }
-            })
-            .catch(error => {
-              console.error('Error updating detection visibility:', error);
-            });
           });
         });
 
-        // Species name input updates (with debouncing)
+        // Species suggestions ONLY (NO saving)
         const speciesInputs = document.querySelectorAll('.species-name-input');
-        let updateTimeout = null;
-        
         speciesInputs.forEach(input => {
           input.addEventListener('input', function() {
+            const query = this.value.trim();
             const detectionId = this.getAttribute('data-detection-id');
-            const newSpeciesName = this.value.trim();
-            
-            // Clear previous timeout
-            if (updateTimeout) {
-              clearTimeout(updateTimeout);
+            const suggestionsBox = document.querySelector(
+              `.species-suggestions[data-detection-id="${detectionId}"]`
+            );
+
+            if (!suggestionsBox) return;
+
+            if (query.length < 1) {
+              suggestionsBox.style.display = 'none';
+              suggestionsBox.innerHTML = '';
+              return;
             }
-            
-            // Debounce the update (wait 500ms after user stops typing)
-            updateTimeout = setTimeout(() => {
-              updateSpeciesName(detectionId, newSpeciesName);
-            }, 500);
+
+            fetch(`/species/search/?q=${encodeURIComponent(query)}`)
+              .then(r => r.json())
+              .then(data => {
+                suggestionsBox.innerHTML = '';
+
+                if (data.species && data.species.length > 0) {
+                  data.species.forEach(species => {
+                    const li = document.createElement('li');
+                    li.style.cssText = 'padding:8px; cursor:pointer; border-bottom:1px solid #eee;';
+                    li.textContent = species;
+
+                    li.addEventListener('mouseenter', () => li.style.backgroundColor = '#f0f0f0');
+                    li.addEventListener('mouseleave', () => li.style.backgroundColor = 'transparent');
+
+                    // Use mousedown so click works even though input loses focus
+                    li.addEventListener('mousedown', (e) => {
+                      e.preventDefault();
+                      input.value = species;
+                      suggestionsBox.style.display = 'none';
+                      suggestionsBox.innerHTML = '';
+                    });
+
+                    suggestionsBox.appendChild(li);
+                  });
+                  suggestionsBox.style.display = 'block';
+                } else {
+                  suggestionsBox.style.display = 'none';
+                }
+              })
+              .catch(() => {
+                suggestionsBox.style.display = 'none';
+                suggestionsBox.innerHTML = '';
+              });
+          });
+
+          // Hide suggestions on blur
+          input.addEventListener('blur', function() {
+            const detectionId = this.getAttribute('data-detection-id');
+            const suggestionsBox = document.querySelector(
+              `.species-suggestions[data-detection-id="${detectionId}"]`
+            );
+            if (suggestionsBox) {
+              suggestionsBox.style.display = 'none';
+            }
           });
         });
-
-        function updateSpeciesName(detectionId, speciesName) {
-          fetch(`/detection/${detectionId}/update-species/`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: `species_name=${encodeURIComponent(speciesName)}`
-          })
-          .then(response => response.json())
-          .then(data => {
-            if (data.success) {
-              // Update the label on the bounding box
-              const detBox = document.querySelector(`.det-box[data-detection-id="${detectionId}"]`);
-              if (detBox) {
-                const label = detBox.querySelector('.det-label');
-                if (label) {
-                  const confidenceMatch = label.textContent.match(/\([\d.]+\)$/);
-                  const confidence = confidenceMatch ? confidenceMatch[0] : '';
-                  label.textContent = `${data.species_name || 'Unknown'} ${confidence}`;
-                }
-              }
-            }
-          })
-          .catch(error => {
-            console.error('Error updating species name:', error);
-          });
-        }
-
-        function getCookie(name) {
-          let cookieValue = null;
-          if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-              const cookie = cookies[i].trim();
-              if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                break;
-              }
-            }
-          }
-          return cookieValue;
-        }
       });
     </script>
   {% endif %}

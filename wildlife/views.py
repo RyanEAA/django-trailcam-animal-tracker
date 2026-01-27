@@ -42,6 +42,31 @@ def index(request):
     return render(request, "wildlife/index.html")
 
 
+def search_species(request):
+    """
+    Search for species by partial name match.
+    Returns a JSON list of species names matching the query.
+    Used for autocomplete suggestions in the detection editor.
+    """
+    query = request.GET.get("q", "").strip().lower()
+    
+    if not query or len(query) < 1:
+        return JsonResponse({"species": []})
+    
+    # Find species names that contain the query (case-insensitive)
+    matching_species = Species.objects.filter(
+        name__icontains=query
+    ).values_list("name", flat=True).order_by("name")[:10]
+    
+    return JsonResponse({
+        "species": list(matching_species)
+    })
+
+
+def index(request):
+    return render(request, "wildlife/index.html")
+
+
 def _build_gallery_filters(request):
     """
     Extract filter params from the request so we can reuse them for HTML
@@ -592,12 +617,16 @@ def update_photo_meta(request, pk):
 @login_required
 @require_POST
 def update_detection_species(request, pk):
-    """Update the species name and visibility for a detection."""
+    """Update the species name and visibility for a detection.
+    
+    Species names are only saved when the request includes a 'save_species' flag.
+    This prevents partial/incomplete species names from being created during typing.
+    """
     require_researcher(request.user)
     detection = get_object_or_404(PhotoDetection, pk=pk)
     
-    # Update species name if provided
-    if "species_name" in request.POST:
+    # Update species name only if explicitly saving (not on every keystroke)
+    if "save_species" in request.POST and "species_name" in request.POST:
         species_name = request.POST.get("species_name", "").strip()
         if species_name:
             from wildlife.services.speciesnet import get_or_create_species
@@ -605,13 +634,13 @@ def update_detection_species(request, pk):
             detection.species = species
         else:
             detection.species = None
+        detection.save()
     
     # Update visibility if provided
     if "is_shown" in request.POST:
         is_shown = request.POST.get("is_shown") == "true"
         detection.is_shown = is_shown
-    
-    detection.save()
+        detection.save()
     
     return JsonResponse({
         "success": True,

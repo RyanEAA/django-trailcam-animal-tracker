@@ -7,6 +7,7 @@ urlpatterns = [
     path("", views.index, name="index"),
     path("gallery/", views.gallery, name="gallery"),
     path("gallery/export/", views.gallery_export, name="gallery_export"),
+    path("species/search/", views.search_species, name="search_species"),
     path("upload/", views.upload_photos, name="upload_photos"),
 
     # Photo detail and edit
