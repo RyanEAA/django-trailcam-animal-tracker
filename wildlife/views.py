@@ -148,6 +148,22 @@ def gallery(request):
 
 
 def gallery_export(request):
+    """
+    Export filtered gallery photos to CSV with one row per detection.
+    
+    Each row includes:
+    - Photo metadata: name, temperature, pressure, date/time, camera
+    - Detection data: animal species, image URL, normalized bounding box (x, y, w, h)
+    
+    Bounding box coordinates are normalized (0.0–1.0):
+      x: fraction from left edge (0.0=leftmost, 1.0=rightmost)
+      y: fraction from top edge (0.0=topmost, 1.0=bottommost)
+      w: box width as fraction of image width
+      h: box height as fraction of image height
+    
+    Example: x=0.1, y=0.2, w=0.3, h=0.4 means the detected object occupies
+    a box 10% from the left, 20% from the top, and is 30% wide and 40% tall.
+    """
     filters = _build_gallery_filters(request)
     qs = _apply_gallery_filters(filters).prefetch_related("detections__species", "camera")
 

@@ -118,7 +118,14 @@ class PhotoDetection(models.Model):
     # useful for AI + later editing
     confidence = models.FloatField(default=0.0)
 
-    # optional bounding box (normalized 0..1)
+    # Normalized bounding box coordinates (0.0 to 1.0 scale).
+    # These are fractional coordinates relative to image dimensions:
+    #   x: horizontal position from left (0.0=left edge, 1.0=right edge)
+    #   y: vertical position from top (0.0=top edge, 1.0=bottom edge)
+    #   w: width as fraction of total image width
+    #   h: height as fraction of total image height
+    # Example: x=0.1, y=0.2, w=0.3, h=0.4 means a box starting 10% from left,
+    # 20% from top, 30% wide, and 40% tall.
     x = models.DecimalField(max_digits=7, decimal_places=6, null=True, blank=True)
     y = models.DecimalField(max_digits=7, decimal_places=6, null=True, blank=True)
     w = models.DecimalField(max_digits=7, decimal_places=6, null=True, blank=True)
