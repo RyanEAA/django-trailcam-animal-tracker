@@ -76,6 +76,9 @@
   <h3 style="margin-top:0; margin-bottom:12px;">Filters</h3>
   
   <form method="get" action="{% url 'wildlife:gallery' %}" style="display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;">
+    {% for sid in selected_species_ids %}
+      <input type="hidden" name="species" value="{{ sid }}">
+    {% endfor %}
     
     <!-- Camera Filter -->
     <div>
@@ -125,6 +128,7 @@
 
     <button type="submit" class="btn btn-primary" style="margin-top:22px;">Apply Filters</button>
     <a href="{% url 'wildlife:gallery' %}" class="btn btn-secondary" style="margin-top:22px;">Clear Filters</a>
+    <button type="submit" class="btn btn-success" style="margin-top:22px;" formaction="{% url 'wildlife:gallery_export' %}" formmethod="get">Export to Excel</button>
   </form>
 
   <!-- Species Filter (Checkboxes) -->

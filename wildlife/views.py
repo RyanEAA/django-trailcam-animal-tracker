@@ -6,6 +6,7 @@ import csv
 import shutil
 import json
 import random
+from io import BytesIO
 from pathlib import Path
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -26,6 +27,7 @@ from django.core.files import File
 
 from PIL import Image, ImageDraw
 import pytesseract
+import pandas as pd
 
 from .models import Photo, PhotoDetection, Species, Camera
 from .forms import PhotoEditForm, CameraForm
@@ -41,41 +43,53 @@ def index(request):
     return render(request, "wildlife/index.html")
 
 
-def gallery(request):
+def _build_gallery_filters(request):
+    """
+    Extract filter params from the request so we can reuse them for HTML
+    rendering and exporting without duplicating logic.
+    """
+    return {
+        "species_ids": request.GET.getlist("species"),
+        "camera_id": (request.GET.get("camera") or "").strip(),
+        "start_date": (request.GET.get("start_date") or "").strip(),
+        "end_date": (request.GET.get("end_date") or "").strip(),
+        "temp_min": (request.GET.get("temp_min") or "").strip(),
+        "temp_max": (request.GET.get("temp_max") or "").strip(),
+        "pressure_min": (request.GET.get("pressure_min") or "").strip(),
+        "pressure_max": (request.GET.get("pressure_max") or "").strip(),
+    }
+
+
+def _apply_gallery_filters(filters):
     qs = Photo.objects.filter(is_published=True).order_by("-uploaded_at")
 
-    species_ids = request.GET.getlist("species")
-    camera_id = (request.GET.get("camera") or "").strip()
+    if filters["species_ids"]:
+        qs = qs.filter(detections__species_id__in=filters["species_ids"]).distinct()
 
-    start_date = (request.GET.get("start_date") or "").strip()
-    end_date = (request.GET.get("end_date") or "").strip()
+    if filters["camera_id"]:
+        qs = qs.filter(camera_id=filters["camera_id"])
 
-    temp_min = (request.GET.get("temp_min") or "").strip()
-    temp_max = (request.GET.get("temp_max") or "").strip()
+    if filters["start_date"]:
+        qs = qs.filter(date_taken__gte=filters["start_date"])
+    if filters["end_date"]:
+        qs = qs.filter(date_taken__lte=filters["end_date"])
 
-    pressure_min = (request.GET.get("pressure_min") or "").strip()
-    pressure_max = (request.GET.get("pressure_max") or "").strip()
+    if filters["temp_min"]:
+        qs = qs.filter(temperature__gte=filters["temp_min"])
+    if filters["temp_max"]:
+        qs = qs.filter(temperature__lte=filters["temp_max"])
 
-    if species_ids:
-        qs = qs.filter(detections__species_id__in=species_ids).distinct()
+    if filters["pressure_min"]:
+        qs = qs.filter(pressure__gte=filters["pressure_min"])
+    if filters["pressure_max"]:
+        qs = qs.filter(pressure__lte=filters["pressure_max"])
 
-    if camera_id:
-        qs = qs.filter(camera_id=camera_id)
+    return qs
 
-    if start_date:
-        qs = qs.filter(date_taken__gte=start_date)
-    if end_date:
-        qs = qs.filter(date_taken__lte=end_date)
 
-    if temp_min:
-        qs = qs.filter(temperature__gte=temp_min)
-    if temp_max:
-        qs = qs.filter(temperature__lte=temp_max)
-
-    if pressure_min:
-        qs = qs.filter(pressure__gte=pressure_min)
-    if pressure_max:
-        qs = qs.filter(pressure__lte=pressure_max)
+def gallery(request):
+    filters = _build_gallery_filters(request)
+    qs = _apply_gallery_filters(filters)
 
     # Prefetch detections for each photo to build bounding boxes
     qs = qs.prefetch_related('detections__species')
@@ -122,16 +136,61 @@ def gallery(request):
         "photo_locations": json.dumps(photo_locations),
         "species_options": Species.objects.all().order_by("name"),
         "camera_options": Camera.objects.all().order_by("name"),
-        "selected_species_ids": list(map(str, species_ids)),
-        "selected_camera_id": camera_id,
-        "start_date": start_date,
-        "end_date": end_date,
-        "temp_min": temp_min,
-        "temp_max": temp_max,
-        "pressure_min": pressure_min,
-        "pressure_max": pressure_max,
+        "selected_species_ids": list(map(str, filters["species_ids"])),
+        "selected_camera_id": filters["camera_id"],
+        "start_date": filters["start_date"],
+        "end_date": filters["end_date"],
+        "temp_min": filters["temp_min"],
+        "temp_max": filters["temp_max"],
+        "pressure_min": filters["pressure_min"],
+        "pressure_max": filters["pressure_max"],
     }
     return render(request, "wildlife/gallery.html", context)
+
+
+def gallery_export(request):
+    filters = _build_gallery_filters(request)
+    qs = _apply_gallery_filters(filters).prefetch_related("detections__species", "camera")
+
+    rows = []
+    for photo in qs:
+        detections = photo.detections.filter(is_shown=True).select_related("species")
+
+        if detections.exists():
+            for det in detections:
+                species_name = det.species.name if det.species else (det.get_category_display() or "Unknown")
+                rows.append({
+                    "Picture Name": os.path.basename(photo.image.name) if photo.image else f"Photo {photo.id}",
+                    "Animals Detected": species_name,
+                    "Temperature (°C)": photo.temperature if photo.temperature is not None else "",
+                    "Pressure (inHg)": photo.pressure if photo.pressure is not None else "",
+                    "Time": photo.time_taken.isoformat() if photo.time_taken else "",
+                    "Date": photo.date_taken.isoformat() if photo.date_taken else "",
+                    "Camera": photo.camera.name if photo.camera else "",
+                })
+        else:
+            rows.append({
+                "Picture Name": os.path.basename(photo.image.name) if photo.image else f"Photo {photo.id}",
+                "Animals Detected": "Unknown",
+                "Temperature (°C)": photo.temperature if photo.temperature is not None else "",
+                "Pressure (inHg)": photo.pressure if photo.pressure is not None else "",
+                "Time": photo.time_taken.isoformat() if photo.time_taken else "",
+                "Date": photo.date_taken.isoformat() if photo.date_taken else "",
+                "Camera": photo.camera.name if photo.camera else "",
+            })
+
+    df = pd.DataFrame(rows)
+    buffer = BytesIO()
+    df.to_excel(buffer, index=False)
+    buffer.seek(0)
+
+    filename = f"gallery_export_{timezone.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    response = HttpResponse(
+        buffer.read(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
 
 
 def photo_detail(request, pk):
