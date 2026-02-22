@@ -1,14 +1,18 @@
 {% extends "wildlife/base.html" %}
 
-{% block title %}OCR Masks{% endblock %}
+{% block title %}{% if is_edit %}Edit OCR Mask{% else %}OCR Masks{% endif %}{% endblock %}
 
 {% block content %}
-<h1>OCR Masks</h1>
+<h1>{% if is_edit %}Edit OCR Mask: {{ mask.name }}{% else %}OCR Masks{% endif %}</h1>
 
 <p style="color:#666; max-width:900px;">
+  {% if is_edit %}
+  Edit the mask regions for this camera model. You can update the mask name, upload a new sample image, or adjust region locations.
+  {% else %}
   Upload a representative trailcam image, then draw boxes for the five OCR regions:
   Temperature, Pressure, Camera ID, Date, and Time. These masks can be selected during 
   upload so OCR reads the correct metadata areas.
+  {% endif %}
 </p>
 
 {% if errors %}
@@ -28,11 +32,12 @@
     <div>
       <label for="name" style="display:block; font-weight:600; margin-bottom:6px;">Mask name</label>
       <input type="text" id="name" name="name" placeholder="e.g., Reconyx-2024" required
+             value="{% if mask %}{{ mask.name }}{% endif %}"
              style="padding:8px 10px; border-radius:10px; border:1px solid #ccc; width:240px;">
     </div>
     <div>
-      <label for="sample_image" style="display:block; font-weight:600; margin-bottom:6px;">Sample image</label>
-      <input type="file" id="sample_image" name="sample_image" accept="image/*" required>
+      <label for="sample_image" style="display:block; font-weight:600; margin-bottom:6px;">Sample image{% if is_edit %} (optional){% endif %}</label>
+      <input type="file" id="sample_image" name="sample_image" accept="image/*" {% if not is_edit %}required{% endif %}>
     </div>
   </div>
 
@@ -57,8 +62,8 @@
   <div style="margin-top:14px; display:flex; gap:20px; align-items:flex-start;">
     <div style="flex:0 0 auto;">
       <div style="position:relative; display:inline-block; max-width:560px; width:100%;">
-        <img id="preview-image" alt="Preview" style="width:100%; max-width:560px; display:none;">
-        <canvas id="overlay-canvas" style="position:absolute; top:0; left:0; display:none;"></canvas>
+        <img id="preview-image" alt="Preview" style="width:100%; max-width:560px; display:{% if mask %}block{% else %}none{% endif %};">
+        <canvas id="overlay-canvas" style="position:absolute; top:0; left:0; display:{% if mask %}block{% else %}none{% endif %};"></canvas>
       </div>
     </div>
 
@@ -71,6 +76,7 @@
             <th style="padding:6px; text-align:left; border-bottom:1px solid #ddd;">Status</th>
             <th style="padding:6px; text-align:left; border-bottom:1px solid #ddd;">Image Preview</th>
             <th style="padding:6px; text-align:left; border-bottom:1px solid #ddd;">Value</th>
+            <th style="padding:6px; text-align:left; border-bottom:1px solid #ddd;">Parsed</th>
             <th style="padding:6px; text-align:left; border-bottom:1px solid #ddd;">Test</th>
           </tr>
         </thead>
@@ -80,6 +86,7 @@
             <td style="padding:6px; border-bottom:1px solid #ddd;"><span id="coord-temperature" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
             <td style="padding:6px; border-bottom:1px solid #ddd;"><img id="preview-temperature" style="max-width:80px; max-height:40px; border:1px solid #ccc;" /></td>
             <td style="padding:6px; border-bottom:1px solid #ddd;"><span id="value-temperature" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
+            <td style="padding:6px; border-bottom:1px solid #ddd;"><span id="parsed-temperature" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
             <td style="padding:6px; border-bottom:1px solid #ddd;"><button type="button" class="btn ocr-test-btn" data-region="temperature" style="padding:4px 8px; font-size:12px;">Test</button></td>
           </tr>
           <tr>
@@ -87,6 +94,7 @@
             <td style="padding:6px; border-bottom:1px solid #ddd;"><span id="coord-pressure" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
             <td style="padding:6px; border-bottom:1px solid #ddd;"><img id="preview-pressure" style="max-width:80px; max-height:40px; border:1px solid #ccc;" /></td>
             <td style="padding:6px; border-bottom:1px solid #ddd;"><span id="value-pressure" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
+            <td style="padding:6px; border-bottom:1px solid #ddd;"><span id="parsed-pressure" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
             <td style="padding:6px; border-bottom:1px solid #ddd;"><button type="button" class="btn ocr-test-btn" data-region="pressure" style="padding:4px 8px; font-size:12px;">Test</button></td>
           </tr>
           <tr>
@@ -94,6 +102,7 @@
             <td style="padding:6px; border-bottom:1px solid #ddd;"><span id="coord-camera" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
             <td style="padding:6px; border-bottom:1px solid #ddd;"><img id="preview-camera" style="max-width:80px; max-height:40px; border:1px solid #ccc;" /></td>
             <td style="padding:6px; border-bottom:1px solid #ddd;"><span id="value-camera" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
+            <td style="padding:6px; border-bottom:1px solid #ddd;"><span id="parsed-camera" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
             <td style="padding:6px; border-bottom:1px solid #ddd;"><button type="button" class="btn ocr-test-btn" data-region="camera" style="padding:4px 8px; font-size:12px;">Test</button></td>
           </tr>
           <tr>
@@ -101,6 +110,7 @@
             <td style="padding:6px; border-bottom:1px solid #ddd;"><span id="coord-date" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
             <td style="padding:6px; border-bottom:1px solid #ddd;"><img id="preview-date" style="max-width:80px; max-height:40px; border:1px solid #ccc;" /></td>
             <td style="padding:6px; border-bottom:1px solid #ddd;"><span id="value-date" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
+            <td style="padding:6px; border-bottom:1px solid #ddd;"><span id="parsed-date" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
             <td style="padding:6px; border-bottom:1px solid #ddd;"><button type="button" class="btn ocr-test-btn" data-region="date" style="padding:4px 8px; font-size:12px;">Test</button></td>
           </tr>
           <tr>
@@ -108,6 +118,7 @@
             <td style="padding:6px;"><span id="coord-time" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
             <td style="padding:6px;"><img id="preview-time" style="max-width:80px; max-height:40px; border:1px solid #ccc;" /></td>
             <td style="padding:6px;"><span id="value-time" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
+            <td style="padding:6px;"><span id="parsed-time" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
             <td style="padding:6px;"><button type="button" class="btn ocr-test-btn" data-region="time" style="padding:4px 8px; font-size:12px;">Test</button></td>
           </tr>
         </tbody>
@@ -142,7 +153,14 @@
   <input type="hidden" name="time_h" id="time_h">
 
   <div style="margin-top:16px;">
-    <button class="btn btn-primary" type="submit" onclick="debugValues()">Save Mask</button>
+    <button class="btn btn-primary" type="submit" onclick="debugValues()">{% if is_edit %}Update Mask{% else %}Save Mask{% endif %}</button>
+    {% if is_edit %}
+      <form method="post" action="{% url 'wildlife:delete_ocr_mask' mask.pk %}" style="display:inline; margin-left:10px;">
+        {% csrf_token %}
+        <button class="btn btn-danger" type="submit" onclick="return confirm('Are you sure you want to delete this mask?');">Delete Mask</button>
+      </form>
+      <a href="{% url 'wildlife:ocr_masks' %}" class="btn" style="margin-left:10px;">Cancel</a>
+    {% endif %}
   </div>
 
   <script>
@@ -165,16 +183,18 @@
 <h2>Saved Masks</h2>
 {% if masks %}
   <div style="display:flex; flex-wrap:wrap; gap:16px;">
-    {% for mask in masks %}
-      <div class="photo-card">
-        <div class="photo-title">{{ mask.name }}</div>
-        <img src="{{ mask.sample_image.url }}" alt="{{ mask.name }}" style="max-width:200px; max-height:160px; object-fit:cover;">
-        <div class="photo-params">
-          <ul>
-            <li>Created: {{ mask.created_at|date:"Y-m-d" }}</li>
-          </ul>
+    {% for m in masks %}
+      <a href="{% url 'wildlife:edit_ocr_mask' m.pk %}" style="text-decoration:none; color:inherit;">
+        <div class="photo-card" style="cursor:pointer; transition:transform 0.2s; border:2px solid #ddd;">
+          <div class="photo-title">{{ m.name }}</div>
+          <img src="{{ m.sample_image.url }}" alt="{{ m.name }}" style="max-width:200px; max-height:160px; object-fit:cover;">
+          <div class="photo-params">
+            <ul>
+              <li>Created: {{ m.created_at|date:"Y-m-d" }}</li>
+            </ul>
+          </div>
         </div>
-      </div>
+      </a>
     {% endfor %}
   </div>
 {% else %}
@@ -202,6 +222,101 @@
     date: null,
     time: null,
   };
+
+  // Store the existing mask coordinates (will be applied after canvas sizing)
+  const existingMaskCoords = {
+    {% if is_edit and mask %}
+      temperature: {% if mask.temperature_x %}{ x: {{ mask.temperature_x }}, y: {{ mask.temperature_y }}, w: {{ mask.temperature_w }}, h: {{ mask.temperature_h }} }{% else %}null{% endif %},
+      pressure: {% if mask.pressure_x %}{ x: {{ mask.pressure_x }}, y: {{ mask.pressure_y }}, w: {{ mask.pressure_w }}, h: {{ mask.pressure_h }} }{% else %}null{% endif %},
+      camera: {% if mask.camera_x %}{ x: {{ mask.camera_x }}, y: {{ mask.camera_y }}, w: {{ mask.camera_w }}, h: {{ mask.camera_h }} }{% else %}null{% endif %},
+      date: {% if mask.date_x %}{ x: {{ mask.date_x }}, y: {{ mask.date_y }}, w: {{ mask.date_w }}, h: {{ mask.date_h }} }{% else %}null{% endif %},
+      time: {% if mask.time_x %}{ x: {{ mask.time_x }}, y: {{ mask.time_y }}, w: {{ mask.time_w }}, h: {{ mask.time_h }} }{% else %}null{% endif %},
+    {% else %}
+      temperature: null,
+      pressure: null,
+      camera: null,
+      date: null,
+      time: null,
+    {% endif %}
+  };
+
+  function applyExistingMaskCoords() {
+    // Apply pre-populated coordinates scaled to current canvas size
+    Object.keys(existingMaskCoords).forEach(region => {
+      const coord = existingMaskCoords[region];
+      if (coord) {
+        regions[region] = {
+          x: coord.x * canvas.width,
+          y: coord.y * canvas.height,
+          w: coord.w * canvas.width,
+          h: coord.h * canvas.height,
+        };
+      }
+    });
+    updateCompletionStatus();
+    drawRegions();
+  }
+
+  function parseRegionValue(region, text) {
+    // Parse OCR text based on region type
+    // This is where you can add regex patterns for each metadata type
+    
+    if (region === "temperature") {
+      // Match patterns like "25.3°C", "25C", "25.3C"
+      const match = text.match(/(\d+\.?\d*)\s*°?C/i);
+      return match ? `${match[1]}°C` : text;
+    } else if (region === "pressure") {
+      // Match patterns like "101.3 kPa", "1013 hPa"
+      const match = text.match(/(\d+\.?\d*)/);
+      return match ? match[1] : text;
+    } else if (region === "camera") {
+      // Camera ID - only correct last 2 characters for common OCR mistakes
+      let cleaned = text.trim().toUpperCase();
+      if (cleaned.length >= 2) {
+        const lastTwo = cleaned.slice(-2);
+        const corrected = lastTwo.replace(/O/g, "0").replace(/[IL]/g, "1").replace(/Z/g, "2").replace(/S/g, "5").replace(/B/g, "8").replace(/G/g, "9");
+        cleaned = cleaned.slice(0, -2) + corrected;
+      }
+      return cleaned;
+    } else if (region === "date") {
+      // Match date patterns YYYY-MM-DD or MM/DD/YYYY
+      const match = text.match(/(\d{1,4}[-\/]\d{1,2}[-\/]\d{1,4})/);
+      return match ? match[1] : text;
+    } else if (region === "time") {
+      // Match time with optional AM/PM
+      // First try HH:MM:SS format
+      let match = text.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+      if (match) {
+        return match[3] ? `${match[1]}:${match[2]}:${match[3]}` : `${match[1]}:${match[2]}`;
+      }
+      
+      // Try 4-digit time with AM/PM (e.g., "0530A" or "0530P")
+      match = text.match(/(\d{2})(\d{2})\s*([AP])/i);
+      if (match) {
+        let hours = parseInt(match[1]);
+        const minutes = match[2];
+        const meridiem = match[3].toUpperCase();
+        
+        // Convert to 24-hour format
+        if (meridiem === "P" && hours !== 12) {
+          hours += 12;
+        } else if (meridiem === "A" && hours === 12) {
+          hours = 0;
+        }
+        
+        return `${String(hours).padStart(2, "0")}:${minutes}`;
+      }
+      
+      // Try just 4 digits without AM/PM
+      match = text.match(/(\d{2})(\d{2})/);
+      if (match) {
+        return `${match[1]}:${match[2]}`;
+      }
+      
+      return text;
+    }
+    return text;
+  }
 
   function setActiveRegion(region) {
     activeRegion = region;
@@ -297,6 +412,36 @@
     };
     reader.readAsDataURL(file);
   });
+
+  // If editing, load the existing image
+  {% if is_edit and mask %}
+    const preview_src = "{{ mask.sample_image.url }}";
+    fetch(preview_src)
+      .then(response => response.blob())
+      .then(blob => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          preview.src = ev.target.result;
+          preview.onload = () => {
+            preview.style.display = "block";
+            
+            const maxWidth = 560;
+            const displayWidth = Math.min(preview.naturalWidth, maxWidth);
+            const scale = displayWidth / preview.naturalWidth;
+            
+            canvas.style.display = "block";
+            canvas.width = displayWidth;
+            canvas.height = preview.naturalHeight * scale;
+            canvas.style.width = `${displayWidth}px`;
+            canvas.style.height = `${canvas.height}px`;
+            
+            // Apply pre-populated coordinates after canvas is sized
+            applyExistingMaskCoords();
+          };
+        };
+        reader.readAsDataURL(blob);
+      });
+  {% endif %}
 
   canvas.addEventListener("mousedown", (e) => {
     if (!activeRegion) return;
@@ -418,6 +563,11 @@
             console.log('No image_data in response');
           }
           document.getElementById(`value-${region}`).textContent = data.ocr_text || "(empty)";
+          
+          // Parse the OCR text based on region type
+          const parsed = parseRegionValue(region, data.ocr_text || "");
+          document.getElementById(`parsed-${region}`).textContent = parsed || "—";
+          
           btn.disabled = false;
           btn.textContent = "Test";
         } catch (error) {

@@ -10,6 +10,8 @@ urlpatterns = [
     path("species/search/", views.search_species, name="search_species"),
     path("upload/", views.upload_photos, name="upload_photos"),
     path("ocr-masks/", views.ocr_masks, name="ocr_masks"),
+    path("ocr-masks/<int:pk>/edit/", views.edit_ocr_mask, name="edit_ocr_mask"),
+    path("ocr-masks/<int:pk>/delete/", views.delete_ocr_mask, name="delete_ocr_mask"),
     path("test-ocr-region/", views.test_ocr_region, name="test_ocr_region"),
 
     # Photo detail and edit

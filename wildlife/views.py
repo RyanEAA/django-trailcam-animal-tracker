@@ -670,6 +670,112 @@ def ocr_masks(request):
     })
 
 
+@login_required
+def edit_ocr_mask(request, pk):
+    require_researcher(request.user)
+    mask = get_object_or_404(OcrMask, pk=pk)
+
+    errors = {}
+    if request.method == "POST":
+        name = (request.POST.get("name") or "").strip()
+        sample_image = request.FILES.get("sample_image")
+
+        def parse_norm(field):
+            raw = (request.POST.get(field) or "").strip()
+            if raw == "":
+                errors[field] = "Required."
+                return None
+            try:
+                val = Decimal(raw)
+            except (InvalidOperation, ValueError):
+                errors[field] = "Must be a number."
+                return None
+            if val < Decimal("0") or val > Decimal("1"):
+                errors[field] = "Must be between 0 and 1."
+                return None
+            return val
+
+        if not name:
+            errors["name"] = "Name is required."
+
+        # Parse all 5 regions: temperature, pressure, camera, date, time
+        temperature_x = parse_norm("temperature_x")
+        temperature_y = parse_norm("temperature_y")
+        temperature_w = parse_norm("temperature_w")
+        temperature_h = parse_norm("temperature_h")
+
+        pressure_x = parse_norm("pressure_x")
+        pressure_y = parse_norm("pressure_y")
+        pressure_w = parse_norm("pressure_w")
+        pressure_h = parse_norm("pressure_h")
+
+        camera_x = parse_norm("camera_x")
+        camera_y = parse_norm("camera_y")
+        camera_w = parse_norm("camera_w")
+        camera_h = parse_norm("camera_h")
+
+        date_x = parse_norm("date_x")
+        date_y = parse_norm("date_y")
+        date_w = parse_norm("date_w")
+        date_h = parse_norm("date_h")
+
+        time_x = parse_norm("time_x")
+        time_y = parse_norm("time_y")
+        time_w = parse_norm("time_w")
+        time_h = parse_norm("time_h")
+
+        # Basic size validation
+        for prefix in ["temperature", "pressure", "camera", "date", "time"]:
+            w_val = eval(f"{prefix}_w")
+            h_val = eval(f"{prefix}_h")
+            if w_val is not None and w_val <= 0:
+                errors[f"{prefix}_w"] = "Width must be > 0."
+            if h_val is not None and h_val <= 0:
+                errors[f"{prefix}_h"] = "Height must be > 0."
+
+        if not errors:
+            mask.name = name
+            if sample_image:
+                mask.sample_image = sample_image
+            mask.temperature_x = temperature_x
+            mask.temperature_y = temperature_y
+            mask.temperature_w = temperature_w
+            mask.temperature_h = temperature_h
+            mask.pressure_x = pressure_x
+            mask.pressure_y = pressure_y
+            mask.pressure_w = pressure_w
+            mask.pressure_h = pressure_h
+            mask.camera_x = camera_x
+            mask.camera_y = camera_y
+            mask.camera_w = camera_w
+            mask.camera_h = camera_h
+            mask.date_x = date_x
+            mask.date_y = date_y
+            mask.date_w = date_w
+            mask.date_h = date_h
+            mask.time_x = time_x
+            mask.time_y = time_y
+            mask.time_w = time_w
+            mask.time_h = time_h
+            mask.save()
+            return redirect("wildlife:ocr_masks")
+
+    return render(request, "wildlife/meta_mask_ocr.html", {
+        "mask": mask,
+        "errors": errors,
+        "is_edit": True,
+    })
+
+
+@login_required
+@require_POST
+def delete_ocr_mask(request, pk):
+    require_researcher(request.user)
+    mask = get_object_or_404(OcrMask, pk=pk)
+    mask.delete()
+    return redirect("wildlife:ocr_masks")
+
+
 # ============================================================
 # Photo actions (staging)
 # ============================================================
