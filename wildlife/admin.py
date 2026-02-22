@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User, Species, Camera, Photo, PhotoDetection
+from .models import User, Species, Camera, Photo, PhotoDetection, OcrMask
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth import get_user_model
 
@@ -47,3 +47,4 @@ class PhotoAdmin(admin.ModelAdmin):
 admin.site.register(Species)
 admin.site.register(Camera)
 admin.site.register(PhotoDetection)
+admin.site.register(OcrMask)

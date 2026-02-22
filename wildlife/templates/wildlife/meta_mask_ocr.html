@@ -1,0 +1,432 @@
+{% extends "wildlife/base.html" %}
+
+{% block title %}OCR Masks{% endblock %}
+
+{% block content %}
+<h1>OCR Masks</h1>
+
+<p style="color:#666; max-width:900px;">
+  Upload a representative trailcam image, then draw boxes for the five OCR regions:
+  Temperature, Pressure, Camera ID, Date, and Time. These masks can be selected during 
+  upload so OCR reads the correct metadata areas.
+</p>
+
+{% if errors %}
+  <div style="background:#ffecec; border:1px solid #f5aca6; padding:10px; margin:14px 0; border-radius:6px;">
+    <strong>Fix the following:</strong>
+    <ul style="margin:6px 0 0 18px;">
+      {% for field, msg in errors.items %}
+        <li>{{ field }}: {{ msg }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data" style="margin:18px 0 28px 0;">
+  {% csrf_token %}
+  <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+    <div>
+      <label for="name" style="display:block; font-weight:600; margin-bottom:6px;">Mask name</label>
+      <input type="text" id="name" name="name" placeholder="e.g., Reconyx-2024" required
+             style="padding:8px 10px; border-radius:10px; border:1px solid #ccc; width:240px;">
+    </div>
+    <div>
+      <label for="sample_image" style="display:block; font-weight:600; margin-bottom:6px;">Sample image</label>
+      <input type="file" id="sample_image" name="sample_image" accept="image/*" required>
+    </div>
+  </div>
+
+  <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
+    <button type="button" class="btn" data-region="temperature">Set Temperature</button>
+    <button type="button" class="btn" data-region="pressure">Set Pressure</button>
+    <button type="button" class="btn" data-region="camera">Set Camera</button>
+    <button type="button" class="btn" data-region="date">Set Date</button>
+    <button type="button" class="btn" data-region="time">Set Time</button>
+    <span id="active-region" style="align-self:center; color:#555;"></span>
+  </div>
+
+  <div id="completion-status" style="margin-top:10px; padding:10px; border-radius:6px; background:#e7f5ff; border:1px solid #74c0fc; display:none;">
+    <strong>Regions:</strong>
+    <span id="status-temperature" style="display:inline-block; margin-right:12px; color:#555;"></span>
+    <span id="status-pressure" style="display:inline-block; margin-right:12px; color:#555;"></span>
+    <span id="status-camera" style="display:inline-block; margin-right:12px; color:#555;"></span>
+    <span id="status-date" style="display:inline-block; margin-right:12px; color:#555;"></span>
+    <span id="status-time" style="display:inline-block; color:#555;"></span>
+  </div>
+
+  <div style="margin-top:14px; display:flex; gap:20px; align-items:flex-start;">
+    <div style="flex:0 0 auto;">
+      <div style="position:relative; display:inline-block; max-width:560px; width:100%;">
+        <img id="preview-image" alt="Preview" style="width:100%; max-width:560px; display:none;">
+        <canvas id="overlay-canvas" style="position:absolute; top:0; left:0; display:none;"></canvas>
+      </div>
+    </div>
+
+    <div style="flex:1; min-width:280px;">
+      <h3 style="margin-top:0;">Region Coordinates</h3>
+      <table style="width:100%; border-collapse:collapse; font-size:13px;">
+        <thead>
+          <tr style="background:#f0f0f0;">
+            <th style="padding:6px; text-align:left; border-bottom:1px solid #ddd;">Region</th>
+            <th style="padding:6px; text-align:left; border-bottom:1px solid #ddd;">Status</th>
+            <th style="padding:6px; text-align:left; border-bottom:1px solid #ddd;">Image Preview</th>
+            <th style="padding:6px; text-align:left; border-bottom:1px solid #ddd;">Value</th>
+            <th style="padding:6px; text-align:left; border-bottom:1px solid #ddd;">Test</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding:6px; border-bottom:1px solid #ddd;">Temperature</td>
+            <td style="padding:6px; border-bottom:1px solid #ddd;"><span id="coord-temperature" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
+            <td style="padding:6px; border-bottom:1px solid #ddd;"><img id="preview-temperature" style="max-width:80px; max-height:40px; border:1px solid #ccc;" /></td>
+            <td style="padding:6px; border-bottom:1px solid #ddd;"><span id="value-temperature" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
+            <td style="padding:6px; border-bottom:1px solid #ddd;"><button type="button" class="btn ocr-test-btn" data-region="temperature" style="padding:4px 8px; font-size:12px;">Test</button></td>
+          </tr>
+          <tr>
+            <td style="padding:6px; border-bottom:1px solid #ddd;">Pressure</td>
+            <td style="padding:6px; border-bottom:1px solid #ddd;"><span id="coord-pressure" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
+            <td style="padding:6px; border-bottom:1px solid #ddd;"><img id="preview-pressure" style="max-width:80px; max-height:40px; border:1px solid #ccc;" /></td>
+            <td style="padding:6px; border-bottom:1px solid #ddd;"><span id="value-pressure" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
+            <td style="padding:6px; border-bottom:1px solid #ddd;"><button type="button" class="btn ocr-test-btn" data-region="pressure" style="padding:4px 8px; font-size:12px;">Test</button></td>
+          </tr>
+          <tr>
+            <td style="padding:6px; border-bottom:1px solid #ddd;">Camera</td>
+            <td style="padding:6px; border-bottom:1px solid #ddd;"><span id="coord-camera" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
+            <td style="padding:6px; border-bottom:1px solid #ddd;"><img id="preview-camera" style="max-width:80px; max-height:40px; border:1px solid #ccc;" /></td>
+            <td style="padding:6px; border-bottom:1px solid #ddd;"><span id="value-camera" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
+            <td style="padding:6px; border-bottom:1px solid #ddd;"><button type="button" class="btn ocr-test-btn" data-region="camera" style="padding:4px 8px; font-size:12px;">Test</button></td>
+          </tr>
+          <tr>
+            <td style="padding:6px; border-bottom:1px solid #ddd;">Date</td>
+            <td style="padding:6px; border-bottom:1px solid #ddd;"><span id="coord-date" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
+            <td style="padding:6px; border-bottom:1px solid #ddd;"><img id="preview-date" style="max-width:80px; max-height:40px; border:1px solid #ccc;" /></td>
+            <td style="padding:6px; border-bottom:1px solid #ddd;"><span id="value-date" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
+            <td style="padding:6px; border-bottom:1px solid #ddd;"><button type="button" class="btn ocr-test-btn" data-region="date" style="padding:4px 8px; font-size:12px;">Test</button></td>
+          </tr>
+          <tr>
+            <td style="padding:6px;">Time</td>
+            <td style="padding:6px;"><span id="coord-time" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
+            <td style="padding:6px;"><img id="preview-time" style="max-width:80px; max-height:40px; border:1px solid #ccc;" /></td>
+            <td style="padding:6px;"><span id="value-time" style="font-family:monospace; color:#666; font-size:12px;">—</span></td>
+            <td style="padding:6px;"><button type="button" class="btn ocr-test-btn" data-region="time" style="padding:4px 8px; font-size:12px;">Test</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Hidden fields for normalized boxes (5 regions) -->
+  <input type="hidden" name="temperature_x" id="temperature_x">
+  <input type="hidden" name="temperature_y" id="temperature_y">
+  <input type="hidden" name="temperature_w" id="temperature_w">
+  <input type="hidden" name="temperature_h" id="temperature_h">
+
+  <input type="hidden" name="pressure_x" id="pressure_x">
+  <input type="hidden" name="pressure_y" id="pressure_y">
+  <input type="hidden" name="pressure_w" id="pressure_w">
+  <input type="hidden" name="pressure_h" id="pressure_h">
+
+  <input type="hidden" name="camera_x" id="camera_x">
+  <input type="hidden" name="camera_y" id="camera_y">
+  <input type="hidden" name="camera_w" id="camera_w">
+  <input type="hidden" name="camera_h" id="camera_h">
+
+  <input type="hidden" name="date_x" id="date_x">
+  <input type="hidden" name="date_y" id="date_y">
+  <input type="hidden" name="date_w" id="date_w">
+  <input type="hidden" name="date_h" id="date_h">
+
+  <input type="hidden" name="time_x" id="time_x">
+  <input type="hidden" name="time_y" id="time_y">
+  <input type="hidden" name="time_w" id="time_w">
+  <input type="hidden" name="time_h" id="time_h">
+
+  <div style="margin-top:16px;">
+    <button class="btn btn-primary" type="submit" onclick="debugValues()">Save Mask</button>
+  </div>
+
+  <script>
+    function debugValues() {
+      console.log("Form values being submitted:");
+      const regions = ["temperature", "pressure", "camera", "date", "time"];
+      regions.forEach(region => {
+        ["x", "y", "w", "h"].forEach(coord => {
+          const id = `${region}_${coord}`;
+          const val = document.getElementById(id).value;
+          console.log(`  ${id}: "${val}"`);
+        });
+      });
+    }
+  </script>
+</form>
+
+<hr>
+
+<h2>Saved Masks</h2>
+{% if masks %}
+  <div style="display:flex; flex-wrap:wrap; gap:16px;">
+    {% for mask in masks %}
+      <div class="photo-card">
+        <div class="photo-title">{{ mask.name }}</div>
+        <img src="{{ mask.sample_image.url }}" alt="{{ mask.name }}" style="max-width:200px; max-height:160px; object-fit:cover;">
+        <div class="photo-params">
+          <ul>
+            <li>Created: {{ mask.created_at|date:"Y-m-d" }}</li>
+          </ul>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <p>No OCR masks yet.</p>
+{% endif %}
+
+<script>
+  const fileInput = document.getElementById("sample_image");
+  const preview = document.getElementById("preview-image");
+  const canvas = document.getElementById("overlay-canvas");
+  const ctx = canvas.getContext("2d");
+  const activeLabel = document.getElementById("active-region");
+  const completionStatus = document.getElementById("completion-status");
+
+  let activeRegion = null;
+  let isDrawing = false;
+  let startX = 0;
+  let startY = 0;
+  let lastValidBox = null;
+
+  const regions = {
+    temperature: null,
+    pressure: null,
+    camera: null,
+    date: null,
+    time: null,
+  };
+
+  function setActiveRegion(region) {
+    activeRegion = region;
+    activeLabel.textContent = region ? `Active region: ${region}` : "";
+  }
+
+  document.querySelectorAll("button[data-region]").forEach((btn) => {
+    btn.addEventListener("click", () => setActiveRegion(btn.dataset.region));
+  });
+
+  function updateCompletionStatus() {
+    completionStatus.style.display = "block";
+    Object.keys(regions).forEach((region) => {
+      const statusEl = document.getElementById(`status-${region}`);
+      const coordEl = document.getElementById(`coord-${region}`);
+      const isComplete = regions[region] !== null;
+      statusEl.textContent = isComplete ? `✓ ${region}` : `✗ ${region}`;
+      statusEl.style.color = isComplete ? "#2f9e44" : "#d9480f";
+      
+      if (isComplete) {
+        const box = regions[region];
+        const nx = (box.x / canvas.width).toFixed(3);
+        const ny = (box.y / canvas.height).toFixed(3);
+        const nw = (box.w / canvas.width).toFixed(3);
+        const nh = (box.h / canvas.height).toFixed(3);
+        coordEl.textContent = `(${nx}, ${ny}) ${nw}×${nh}`;
+        coordEl.style.color = "#2f9e44";
+      } else {
+        coordEl.textContent = "—";
+        coordEl.style.color = "#d9480f";
+      }
+    });
+  }
+
+  function drawRegions() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const colors = { 
+      temperature: "#ff6b6b", 
+      pressure: "#ffa94d", 
+      camera: "#4dabf7", 
+      date: "#51cf66", 
+      time: "#b197fc" 
+    };
+
+    Object.entries(regions).forEach(([key, box]) => {
+      if (!box) return;
+      ctx.strokeStyle = colors[key];
+      ctx.lineWidth = 2;
+      ctx.strokeRect(box.x, box.y, box.w, box.h);
+      ctx.fillStyle = colors[key];
+      ctx.font = "12px Arial";
+      ctx.fillText(key, box.x + 4, box.y - 4);
+    });
+  }
+
+  function updateHiddenInputs(region, box) {
+    const nx = (box.x / canvas.width).toFixed(6);
+    const ny = (box.y / canvas.height).toFixed(6);
+    const nw = (box.w / canvas.width).toFixed(6);
+    const nh = (box.h / canvas.height).toFixed(6);
+
+    document.getElementById(`${region}_x`).value = nx;
+    document.getElementById(`${region}_y`).value = ny;
+    document.getElementById(`${region}_w`).value = nw;
+    document.getElementById(`${region}_h`).value = nh;
+    
+    updateCompletionStatus();
+  }
+
+  fileInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      preview.src = ev.target.result;
+      preview.onload = () => {
+        // Scale image to max-width: 560px for display consistency
+        preview.style.display = "block";
+        
+        const maxWidth = 560;
+        const displayWidth = Math.min(preview.naturalWidth, maxWidth);
+        const scale = displayWidth / preview.naturalWidth;
+        
+        canvas.style.display = "block";
+        canvas.width = displayWidth;
+        canvas.height = preview.naturalHeight * scale;
+        canvas.style.width = `${displayWidth}px`;
+        canvas.style.height = `${canvas.height}px`;
+        
+        drawRegions();
+      };
+    };
+    reader.readAsDataURL(file);
+  });
+
+  canvas.addEventListener("mousedown", (e) => {
+    if (!activeRegion) return;
+    isDrawing = true;
+    const rect = canvas.getBoundingClientRect();
+    startX = e.clientX - rect.left;
+    startY = e.clientY - rect.top;
+  });
+
+  canvas.addEventListener("mousemove", (e) => {
+    if (!isDrawing || !activeRegion) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    // Only update box if mouse is within canvas bounds
+    if (x >= 0 && x <= canvas.width && y >= 0 && y <= canvas.height) {
+      const box = {
+        x: Math.min(startX, x),
+        y: Math.min(startY, y),
+        w: Math.abs(x - startX),
+        h: Math.abs(y - startY),
+      };
+
+      regions[activeRegion] = box;
+      lastValidBox = { region: activeRegion, box: box };
+      drawRegions();
+    }
+  });
+
+  canvas.addEventListener("mouseup", () => {
+    if (!isDrawing || !activeRegion) return;
+    isDrawing = false;
+    
+    // Use lastValidBox if available, otherwise use current regions entry
+    let box = regions[activeRegion];
+    if (lastValidBox && lastValidBox.region === activeRegion) {
+      box = lastValidBox.box;
+      regions[activeRegion] = box;
+    }
+    
+    if (box) {
+      updateHiddenInputs(activeRegion, box);
+    }
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    if (isDrawing && lastValidBox && lastValidBox.region === activeRegion) {
+      // Save the last valid box when mouse leaves
+      const box = lastValidBox.box;
+      regions[activeRegion] = box;
+      updateHiddenInputs(activeRegion, box);
+    }
+    isDrawing = false;
+  });
+
+  // OCR Test functionality
+  document.querySelectorAll(".ocr-test-btn").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const region = btn.dataset.region;
+      if (!regions[region]) {
+        alert("Please draw this region first.");
+        return;
+      }
+      
+      const box = regions[region];
+      console.log(`Extracting region ${region}:`, box);
+      
+      // Calculate scale factor: canvas is scaled down to max 560px, but preview is full size
+      const maxWidth = 560;
+      const displayWidth = Math.min(preview.naturalWidth, maxWidth);
+      const inverseScale = preview.naturalWidth / displayWidth;
+      
+      // Scale box coordinates back to original image size
+      const origX = box.x * inverseScale;
+      const origY = box.y * inverseScale;
+      const origW = box.w * inverseScale;
+      const origH = box.h * inverseScale;
+      
+      console.log(`Original coords: x=${origX}, y=${origY}, w=${origW}, h=${origH}, inverseScale=${inverseScale}`);
+      
+      // Create a temporary canvas with just this region at original size
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = origW;
+      tempCanvas.height = origH;
+      const tempCtx = tempCanvas.getContext("2d");
+      
+      // Draw the cropped region from the preview image (using original coordinates)
+      tempCtx.drawImage(preview, origX, origY, origW, origH, 0, 0, origW, origH);
+      
+      console.log(`Canvas extracted: ${tempCanvas.width}x${tempCanvas.height}`);
+      
+      // Convert to blob and send to backend
+      tempCanvas.toBlob(async (blob) => {
+        const formData = new FormData();
+        formData.append("region_image", blob);
+        formData.append("region_name", region);
+        
+        btn.disabled = true;
+        btn.textContent = "Testing...";
+        
+        try {
+          const response = await fetch("{% url 'wildlife:test_ocr_region' %}", {
+            method: "POST",
+            body: formData,
+            headers: {
+              "X-CSRFToken": "{{ csrf_token }}"
+            }
+          });
+          
+          const data = await response.json();
+          console.log('OCR Response:', data);
+          if (data.image_data) {
+            const src = `data:image/png;base64,${data.image_data}`;
+            console.log('Setting preview image with src length:', data.image_data.length);
+            document.getElementById(`preview-${region}`).src = src;
+          } else {
+            console.log('No image_data in response');
+          }
+          document.getElementById(`value-${region}`).textContent = data.ocr_text || "(empty)";
+          btn.disabled = false;
+          btn.textContent = "Test";
+        } catch (error) {
+          console.error("OCR test failed:", error);
+          btn.textContent = "Error";
+          btn.style.color = "#d9480f";
+        }
+      }, "image/png");
+    });
+  });
+</script>
+{% endblock %}

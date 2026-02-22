@@ -42,6 +42,15 @@ class Camera(models.Model):
 class Photo(models.Model):
     image = models.ImageField(upload_to='trailcam/')
 
+    # Optional OCR mask used to locate metadata regions on the image
+    ocr_mask = models.ForeignKey(
+        "wildlife.OcrMask",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="photos",
+    )
+
     # NEW: Camera FK
     camera = models.ForeignKey(Camera, null=True, blank=True, on_delete=models.SET_NULL)
 
@@ -96,6 +105,45 @@ class Photo(models.Model):
         if len(names) > 2:
             label += "…"
         return f"{label} ({self.pk})"
+
+
+class OcrMask(models.Model):
+    """
+    Defines the OCR regions as normalized box coordinates.
+    Each box is stored as fractional values (0..1) relative to the full image.
+    """
+    name = models.CharField(max_length=100, unique=True)
+    sample_image = models.ImageField(upload_to="ocr_masks/")
+
+    temperature_x = models.DecimalField(max_digits=7, decimal_places=6)
+    temperature_y = models.DecimalField(max_digits=7, decimal_places=6)
+    temperature_w = models.DecimalField(max_digits=7, decimal_places=6)
+    temperature_h = models.DecimalField(max_digits=7, decimal_places=6)
+
+    pressure_x = models.DecimalField(max_digits=7, decimal_places=6)
+    pressure_y = models.DecimalField(max_digits=7, decimal_places=6)
+    pressure_w = models.DecimalField(max_digits=7, decimal_places=6)
+    pressure_h = models.DecimalField(max_digits=7, decimal_places=6)
+
+    camera_x = models.DecimalField(max_digits=7, decimal_places=6)
+    camera_y = models.DecimalField(max_digits=7, decimal_places=6)
+    camera_w = models.DecimalField(max_digits=7, decimal_places=6)
+    camera_h = models.DecimalField(max_digits=7, decimal_places=6)
+
+    date_x = models.DecimalField(max_digits=7, decimal_places=6)
+    date_y = models.DecimalField(max_digits=7, decimal_places=6)
+    date_w = models.DecimalField(max_digits=7, decimal_places=6)
+    date_h = models.DecimalField(max_digits=7, decimal_places=6)
+
+    time_x = models.DecimalField(max_digits=7, decimal_places=6)
+    time_y = models.DecimalField(max_digits=7, decimal_places=6)
+    time_w = models.DecimalField(max_digits=7, decimal_places=6)
+    time_h = models.DecimalField(max_digits=7, decimal_places=6)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
 
 class PhotoDetection(models.Model):
     CATEGORY_CHOICES = [

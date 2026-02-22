@@ -22,6 +22,21 @@
       style="margin-bottom:26px;">
   {% csrf_token %}
 
+  <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-bottom:14px;">
+    <div>
+      <label for="ocr-mask" style="display:block; font-weight:600; margin-bottom:6px;">OCR Mask</label>
+      <select id="ocr-mask" name="ocr_mask" style="padding:8px 10px; border-radius:10px; border:1px solid #ccc; min-width:220px;">
+        <option value="">Default (auto strip)</option>
+        {% for mask in ocr_masks %}
+          <option value="{{ mask.id }}" {% if selected_mask_id == mask.id %}selected{% endif %}>{{ mask.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="align-self:flex-end;">
+      <a href="{% url 'wildlife:ocr_masks' %}" class="btn">Manage OCR Masks</a>
+    </div>
+  </div>
+
   <input id="file-input"
          type="file"
          name="images"

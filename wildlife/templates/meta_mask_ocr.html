@@ -1,0 +1,210 @@
+	{% extends "wildlife/base.html" %}
+
+	{% block title %}OCR Masks{% endblock %}
+
+	{% block content %}
+	<h1>OCR Masks</h1>
+
+	<p style="color:#666; max-width:900px;">
+		Upload a representative trailcam image, then draw boxes for the three OCR regions:
+		Left (Temp/Pressure), Center (Camera ID), and Right (Date/Time). These masks can
+		be selected during upload so OCR reads the correct metadata areas.
+	</p>
+
+	{% if errors %}
+		<div style="background:#ffecec; border:1px solid #f5aca6; padding:10px; margin:14px 0; border-radius:6px;">
+			<strong>Fix the following:</strong>
+			<ul style="margin:6px 0 0 18px;">
+				{% for field, msg in errors.items %}
+					<li>{{ field }}: {{ msg }}</li>
+				{% endfor %}
+			</ul>
+		</div>
+	{% endif %}
+
+	<form method="post" enctype="multipart/form-data" style="margin:18px 0 28px 0;">
+		{% csrf_token %}
+		<div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+			<div>
+				<label for="name" style="display:block; font-weight:600; margin-bottom:6px;">Mask name</label>
+				<input type="text" id="name" name="name" placeholder="e.g., Reconyx-2024" required
+							 style="padding:8px 10px; border-radius:10px; border:1px solid #ccc; width:240px;">
+			</div>
+			<div>
+				<label for="sample_image" style="display:block; font-weight:600; margin-bottom:6px;">Sample image</label>
+				<input type="file" id="sample_image" name="sample_image" accept="image/*" required>
+			</div>
+		</div>
+
+		<div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
+			<button type="button" class="btn" data-region="left">Set Left (Temp/Pressure)</button>
+			<button type="button" class="btn" data-region="center">Set Center (Camera)</button>
+			<button type="button" class="btn" data-region="right">Set Right (Date/Time)</button>
+			<span id="active-region" style="align-self:center; color:#555;"></span>
+		</div>
+
+		<div style="margin-top:14px;">
+			<div style="position:relative; display:inline-block; max-width:100%;">
+				<img id="preview-image" alt="Preview" style="max-width:100%; border-radius:8px; display:none;">
+				<canvas id="overlay-canvas" style="position:absolute; top:0; left:0; display:none;"></canvas>
+			</div>
+		</div>
+
+		<!-- Hidden fields for normalized boxes -->
+		<input type="hidden" name="left_x" id="left_x">
+		<input type="hidden" name="left_y" id="left_y">
+		<input type="hidden" name="left_w" id="left_w">
+		<input type="hidden" name="left_h" id="left_h">
+
+		<input type="hidden" name="center_x" id="center_x">
+		<input type="hidden" name="center_y" id="center_y">
+		<input type="hidden" name="center_w" id="center_w">
+		<input type="hidden" name="center_h" id="center_h">
+
+		<input type="hidden" name="right_x" id="right_x">
+		<input type="hidden" name="right_y" id="right_y">
+		<input type="hidden" name="right_w" id="right_w">
+		<input type="hidden" name="right_h" id="right_h">
+
+		<div style="margin-top:16px;">
+			<button class="btn btn-primary" type="submit">Save Mask</button>
+		</div>
+	</form>
+
+	<hr>
+
+	<h2>Saved Masks</h2>
+	{% if masks %}
+		<div style="display:flex; flex-wrap:wrap; gap:16px;">
+			{% for mask in masks %}
+				<div class="photo-card">
+					<div class="photo-title">{{ mask.name }}</div>
+					<img src="{{ mask.sample_image.url }}" alt="{{ mask.name }}" style="max-height:160px; object-fit:cover;">
+					<div class="photo-params">
+						<ul>
+							<li>Created: {{ mask.created_at|date:"Y-m-d" }}</li>
+						</ul>
+					</div>
+				</div>
+			{% endfor %}
+		</div>
+	{% else %}
+		<p>No OCR masks yet.</p>
+	{% endif %}
+
+	<script>
+		const fileInput = document.getElementById("sample_image");
+		const preview = document.getElementById("preview-image");
+		const canvas = document.getElementById("overlay-canvas");
+		const ctx = canvas.getContext("2d");
+		const activeLabel = document.getElementById("active-region");
+
+		let activeRegion = null;
+		let isDrawing = false;
+		let startX = 0;
+		let startY = 0;
+
+		const regions = {
+			left: null,
+			center: null,
+			right: null,
+		};
+
+		function setActiveRegion(region) {
+			activeRegion = region;
+			activeLabel.textContent = region ? `Active region: ${region}` : "";
+		}
+
+		document.querySelectorAll("button[data-region]").forEach((btn) => {
+			btn.addEventListener("click", () => setActiveRegion(btn.dataset.region));
+		});
+
+		function drawRegions() {
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			const colors = { left: "#ff6b6b", center: "#4dabf7", right: "#51cf66" };
+
+			Object.entries(regions).forEach(([key, box]) => {
+				if (!box) return;
+				ctx.strokeStyle = colors[key];
+				ctx.lineWidth = 2;
+				ctx.strokeRect(box.x, box.y, box.w, box.h);
+				ctx.fillStyle = colors[key];
+				ctx.font = "12px Arial";
+				ctx.fillText(key, box.x + 4, box.y + 14);
+			});
+		}
+
+		function updateHiddenInputs(region, box) {
+			const nx = (box.x / canvas.width).toFixed(6);
+			const ny = (box.y / canvas.height).toFixed(6);
+			const nw = (box.w / canvas.width).toFixed(6);
+			const nh = (box.h / canvas.height).toFixed(6);
+
+			document.getElementById(`${region}_x`).value = nx;
+			document.getElementById(`${region}_y`).value = ny;
+			document.getElementById(`${region}_w`).value = nw;
+			document.getElementById(`${region}_h`).value = nh;
+		}
+
+		fileInput.addEventListener("change", (e) => {
+			const file = e.target.files[0];
+			if (!file) return;
+
+			const reader = new FileReader();
+			reader.onload = (ev) => {
+				preview.src = ev.target.result;
+				preview.onload = () => {
+					preview.style.display = "block";
+					canvas.style.display = "block";
+					canvas.width = preview.width;
+					canvas.height = preview.height;
+					canvas.style.width = `${preview.width}px`;
+					canvas.style.height = `${preview.height}px`;
+					drawRegions();
+				};
+			};
+			reader.readAsDataURL(file);
+		});
+
+		canvas.addEventListener("mousedown", (e) => {
+			if (!activeRegion) return;
+			isDrawing = true;
+			const rect = canvas.getBoundingClientRect();
+			startX = e.clientX - rect.left;
+			startY = e.clientY - rect.top;
+		});
+
+		canvas.addEventListener("mousemove", (e) => {
+			if (!isDrawing || !activeRegion) return;
+			const rect = canvas.getBoundingClientRect();
+			const x = e.clientX - rect.left;
+			const y = e.clientY - rect.top;
+
+			const box = {
+				x: Math.min(startX, x),
+				y: Math.min(startY, y),
+				w: Math.abs(x - startX),
+				h: Math.abs(y - startY),
+			};
+
+			regions[activeRegion] = box;
+			drawRegions();
+		});
+
+		canvas.addEventListener("mouseup", () => {
+			if (!isDrawing || !activeRegion) return;
+			isDrawing = false;
+			const box = regions[activeRegion];
+			if (box) {
+				updateHiddenInputs(activeRegion, box);
+			}
+		});
+
+		canvas.addEventListener("mouseleave", () => {
+			if (isDrawing) {
+				isDrawing = false;
+			}
+		});
+	</script>
+	{% endblock %}
+    

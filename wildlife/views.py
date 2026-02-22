@@ -28,10 +28,76 @@ from django.core.files import File
 from PIL import Image, ImageDraw
 import pytesseract
 
-from .models import Photo, PhotoDetection, Species, Camera
+from .models import Photo, PhotoDetection, Species, Camera, OcrMask
 from .forms import PhotoEditForm, CameraForm
 from .utils.utils import require_researcher
 from wildlife.utils.ocr import crop_bottom_strip, extract_overlay_meta_split
+
+
+def _clamp(v: float, min_v: float = 0.0, max_v: float = 1.0) -> float:
+    return max(min_v, min(max_v, v))
+
+
+def _crop_norm(img: Image.Image, x: float, y: float, w: float, h: float) -> Image.Image:
+    width, height = img.size
+    left = int(_clamp(x) * width)
+    top = int(_clamp(y) * height)
+    right = int(_clamp(x + w) * width)
+    bottom = int(_clamp(y + h) * height)
+    # Ensure non-zero box and within bounds
+    right = max(right, left + 1)
+    bottom = max(bottom, top + 1)
+    right = min(right, width)
+    bottom = min(bottom, height)
+    return img.crop((left, top, right, bottom))
+
+
+def _ocr_text_from_region(region: Image.Image) -> str:
+    gray = region.convert("L")
+    scale = 3
+    gray = gray.resize((gray.width * scale, gray.height * scale))
+    gray = gray.point(lambda p: 255 if p > 140 else 0)
+    config = "--oem 1 --psm 7"
+    return pytesseract.image_to_string(gray, config=config)
+
+
+def _extract_overlay_meta(img: Image.Image, mask: OcrMask | None):
+    """Run OCR using either a saved mask or the default strip split."""
+    if mask:
+        temperature = _crop_norm(img, float(mask.temperature_x), float(mask.temperature_y), float(mask.temperature_w), float(mask.temperature_h))
+        pressure = _crop_norm(img, float(mask.pressure_x), float(mask.pressure_y), float(mask.pressure_w), float(mask.pressure_h))
+        camera = _crop_norm(img, float(mask.camera_x), float(mask.camera_y), float(mask.camera_w), float(mask.camera_h))
+        date = _crop_norm(img, float(mask.date_x), float(mask.date_y), float(mask.date_w), float(mask.date_h))
+        time = _crop_norm(img, float(mask.time_x), float(mask.time_y), float(mask.time_w), float(mask.time_h))
+
+        t_temperature = _ocr_text_from_region(temperature)
+        t_pressure = _ocr_text_from_region(pressure)
+        t_camera = _ocr_text_from_region(camera)
+        t_date = _ocr_text_from_region(date)
+        t_time = _ocr_text_from_region(time)
+
+        # Combine temperature + pressure into left region, date + time into right region for compatibility
+        t_left = f"{t_temperature} {t_pressure}"
+        t_center = t_camera
+        t_right = f"{t_date} {t_time}"
+        return extract_overlay_meta_split(t_left, t_center, t_right)
+
+    # Default behavior (bottom strip split)
+    strip = crop_bottom_strip(img, pct=0.042).convert("L")
+    scale = 3
+    strip = strip.resize((strip.width * scale, strip.height * scale))
+    strip = strip.point(lambda p: 255 if p > 140 else 0)
+
+    w, h = strip.size
+    left = strip.crop((0, 0, int(w * 0.40), h))
+    center = strip.crop((int(w * 0.35), 0, int(w * 0.75), h))
+    right = strip.crop((int(w * 0.70), 0, w, h))
+
+    config = "--oem 1 --psm 7"
+    t_left = pytesseract.image_to_string(left, config=config)
+    t_center = pytesseract.image_to_string(center, config=config)
+    t_right = pytesseract.image_to_string(right, config=config)
+    return extract_overlay_meta_split(t_left, t_center, t_right)
 
 from .services.speciesnet import run_speciesnet_on_image, save_speciesnet_results
 # ============================================================
@@ -317,7 +383,11 @@ def upload_photos(request):
         return HttpResponseForbidden("Only researchers can upload photos.")
 
     error = None
+    selected_mask = None
     if request.method == "POST":
+        mask_id = (request.POST.get("ocr_mask") or "").strip()
+        if mask_id:
+            selected_mask = OcrMask.objects.filter(id=mask_id).first()
         files = request.FILES.getlist("images")
         if not files:
             error = "No files received. Please choose images before uploading."
@@ -351,26 +421,7 @@ def upload_photos(request):
                     ocr_data = None
                     try:
                         img = Image.open(inbox_file_path)
-                        strip = crop_bottom_strip(img, pct=0.042).convert("L")
-                        
-                        # upscale to help OCR
-                        scale = 3
-                        strip = strip.resize((strip.width * scale, strip.height * scale))
-                        
-                        # binarize (white text on black bar)
-                        strip = strip.point(lambda p: 255 if p > 140 else 0)
-                        
-                        w, h = strip.size
-                        left   = strip.crop((0, 0, int(w * 0.40), h))
-                        center = strip.crop((int(w * 0.35), 0, int(w * 0.75), h))
-                        right  = strip.crop((int(w * 0.70), 0, w, h))
-                        
-                        config = "--oem 1 --psm 7"
-                        t_left   = pytesseract.image_to_string(left, config=config)
-                        t_center = pytesseract.image_to_string(center, config=config)
-                        t_right  = pytesseract.image_to_string(right, config=config)
-                        
-                        ocr_data = extract_overlay_meta_split(t_left, t_center, t_right)
+                        ocr_data = _extract_overlay_meta(img, selected_mask)
                     except Exception as e:
                         print(f"OCR warning for {uploaded_file.name}: {e}")
                     
@@ -396,6 +447,9 @@ def upload_photos(request):
                         uploaded_by=request.user,
                         is_published=False
                     )
+
+                    if selected_mask:
+                        photo.ocr_mask = selected_mask
                     
                     # Apply OCR metadata if available
                     if ocr_data:
@@ -447,15 +501,172 @@ def upload_photos(request):
                 return redirect("wildlife:upload_photos")
 
     recent_photos = Photo.objects.filter(is_published=False).order_by("-uploaded_at")[:50]
+    ocr_masks = OcrMask.objects.order_by("name")
 
     return render(request, "wildlife/upload.html", {
         "error": error,
         "recent_photos": recent_photos,
+        "ocr_masks": ocr_masks,
+        "selected_mask_id": selected_mask.id if selected_mask else "",
         "camera_names": list(
             Camera.objects.filter(is_active=True)
             .order_by("name")
             .values_list("name", flat=True)
         ),
+    })
+
+
+@login_required
+def test_ocr_region(request):
+    """Test OCR on a region image and return extracted text."""
+    require_researcher(request.user)
+    
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=400)
+    
+    region_image = request.FILES.get("region_image")
+    if not region_image:
+        return JsonResponse({"error": "No image provided"}, status=400)
+    
+    try:
+        # Open image and prepare for OCR
+        img = Image.open(region_image)
+        print(f"Region image size: {img.size}, mode: {img.mode}")
+        
+        # Convert to RGB if needed, then to grayscale
+        if img.mode == "RGBA":
+            img = img.convert("RGB")
+        img = img.convert("L")
+        
+        # Upscale for better OCR
+        scale = 4
+        new_width = img.width * scale
+        new_height = img.height * scale
+        img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        
+        # Apply binarization to create clean black text on white
+        # Threshold at 128 (middle value) to create high contrast
+        img = img.point(lambda p: 255 if p > 128 else 0, "1")
+        
+        # Convert back to L mode for OCR
+        img = img.convert("L")
+        
+        # Encode processed image to base64 for preview
+        import base64
+        from io import BytesIO
+        buffer = BytesIO()
+        img.save(buffer, format="PNG")
+        img_base64 = base64.b64encode(buffer.getvalue()).decode()
+        print(f"Base64 image length: {len(img_base64)}, upscaled size: {img.size}")
+        
+        # Run OCR
+        ocr_text = pytesseract.image_to_string(img).strip()
+        print(f"OCR result: '{ocr_text}'")
+        
+        return JsonResponse({"ocr_text": ocr_text, "image_data": img_base64})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"OCR test error: {e}")
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@login_required
+def ocr_masks(request):
+    require_researcher(request.user)
+
+    errors = {}
+    if request.method == "POST":
+        name = (request.POST.get("name") or "").strip()
+        sample_image = request.FILES.get("sample_image")
+
+        def parse_norm(field):
+            raw = (request.POST.get(field) or "").strip()
+            if raw == "":
+                errors[field] = "Required."
+                return None
+            try:
+                val = Decimal(raw)
+            except (InvalidOperation, ValueError):
+                errors[field] = "Must be a number."
+                return None
+            if val < Decimal("0") or val > Decimal("1"):
+                errors[field] = "Must be between 0 and 1."
+                return None
+            return val
+
+        if not name:
+            errors["name"] = "Name is required."
+        if not sample_image:
+            errors["sample_image"] = "Sample image is required."
+
+        # Parse all 5 regions: temperature, pressure, camera, date, time
+        temperature_x = parse_norm("temperature_x")
+        temperature_y = parse_norm("temperature_y")
+        temperature_w = parse_norm("temperature_w")
+        temperature_h = parse_norm("temperature_h")
+
+        pressure_x = parse_norm("pressure_x")
+        pressure_y = parse_norm("pressure_y")
+        pressure_w = parse_norm("pressure_w")
+        pressure_h = parse_norm("pressure_h")
+
+        camera_x = parse_norm("camera_x")
+        camera_y = parse_norm("camera_y")
+        camera_w = parse_norm("camera_w")
+        camera_h = parse_norm("camera_h")
+
+        date_x = parse_norm("date_x")
+        date_y = parse_norm("date_y")
+        date_w = parse_norm("date_w")
+        date_h = parse_norm("date_h")
+
+        time_x = parse_norm("time_x")
+        time_y = parse_norm("time_y")
+        time_w = parse_norm("time_w")
+        time_h = parse_norm("time_h")
+
+        # Basic size validation
+        for prefix in ["temperature", "pressure", "camera", "date", "time"]:
+            w_val = eval(f"{prefix}_w")
+            h_val = eval(f"{prefix}_h")
+            if w_val is not None and w_val <= 0:
+                errors[f"{prefix}_w"] = "Width must be > 0."
+            if h_val is not None and h_val <= 0:
+                errors[f"{prefix}_h"] = "Height must be > 0."
+
+        if not errors:
+            OcrMask.objects.create(
+                name=name,
+                sample_image=sample_image,
+                temperature_x=temperature_x,
+                temperature_y=temperature_y,
+                temperature_w=temperature_w,
+                temperature_h=temperature_h,
+                pressure_x=pressure_x,
+                pressure_y=pressure_y,
+                pressure_w=pressure_w,
+                pressure_h=pressure_h,
+                camera_x=camera_x,
+                camera_y=camera_y,
+                camera_w=camera_w,
+                camera_h=camera_h,
+                date_x=date_x,
+                date_y=date_y,
+                date_w=date_w,
+                date_h=date_h,
+                time_x=time_x,
+                time_y=time_y,
+                time_w=time_w,
+                time_h=time_h,
+            )
+            return redirect("wildlife:ocr_masks")
+
+    masks = OcrMask.objects.order_by("name")
+
+    return render(request, "wildlife/meta_mask_ocr.html", {
+        "masks": masks,
+        "errors": errors,
     })
 
 
@@ -472,31 +683,10 @@ def analyze_photo(request, pk):
     # 1) Run OCR pipeline
     try:
         img = Image.open(photo.image.path)
-        strip = crop_bottom_strip(img, pct=0.042).convert("L")
-
-        # upscale to help OCR
-        scale = 3
-        strip = strip.resize((strip.width * scale, strip.height * scale))
-
-        # binarize (white text on black bar)
-        strip = strip.point(lambda p: 255 if p > 140 else 0)
-
-        config = "--oem 1 --psm 7"
-
-        w, h = strip.size
-        left   = strip.crop((0, 0, int(w * 0.40), h))                 # temp/pressure
-        center = strip.crop((int(w * 0.35), 0, int(w * 0.75), h))      # camera
-        right  = strip.crop((int(w * 0.70), 0, w, h))                  # date/time
-
-        t_left   = pytesseract.image_to_string(left, config=config)
-        t_center = pytesseract.image_to_string(center, config=config)
-        t_right  = pytesseract.image_to_string(right, config=config)
-
+        data = _extract_overlay_meta(img, photo.ocr_mask)
     except Exception as e:
         print("OCR ERROR:", e)
         return HttpResponseForbidden("OCR failed. Is Tesseract installed?")
-
-    data = extract_overlay_meta_split(t_left, t_center, t_right)
 
     # set camera if exists, create if not
     if data.camera_name:

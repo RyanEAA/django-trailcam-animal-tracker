@@ -17,6 +17,7 @@
       {% if user.is_authenticated and user.is_researcher %}
         <a class="nav-link" href="{% url 'wildlife:upload_photos' %}">Upload Photos</a>
         <a class="nav-link" href="{% url 'wildlife:cameras_list' %}">Cameras</a>
+        <a class="nav-link" href="{% url 'wildlife:ocr_masks' %}">OCR Masks</a>
       {% endif %}
     </div>
 
