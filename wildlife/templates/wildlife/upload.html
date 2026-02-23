@@ -411,8 +411,15 @@
 
     function updateBulkButtons() {
       const anySelected = selectedIds.size > 0;
-      if (bulkDeleteBtn) bulkDeleteBtn.disabled = !anySelected;
-      if (bulkPublishBtn) bulkPublishBtn.disabled = !anySelected;
+      const count = selectedIds.size;
+      if (bulkDeleteBtn) {
+        bulkDeleteBtn.disabled = !anySelected;
+        bulkDeleteBtn.textContent = anySelected ? `Delete Selected (${count})` : 'Delete Selected';
+      }
+      if (bulkPublishBtn) {
+        bulkPublishBtn.disabled = !anySelected;
+        bulkPublishBtn.textContent = anySelected ? `Publish Selected (${count})` : 'Publish Selected';
+      }
       if (selectAllBtn) {
         selectAllBtn.textContent = anySelected ? "Clear Selection" : "Select All";
       }

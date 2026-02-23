@@ -67,6 +67,35 @@
   .filter-section {
     margin-bottom: 20px;
   }
+  
+  /* Bulk selection styling */
+  .photo-card.is-selected {
+    outline: 3px solid #007bff;
+    outline-offset: 2px;
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.4);
+  }
+  
+  .bulk-actions {
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 12px 16px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .bulk-actions .btn-danger {
+    background: #e03131;
+    color: #fff;
+  }
+  .bulk-actions .right-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 10px;
+  }
 </style>
 
 <h1>Public Gallery</h1>
@@ -157,6 +186,19 @@
     </div>
   {% endif %}
 </div>
+
+{% if user.is_authenticated and user.is_researcher %}
+<div class="bulk-actions">
+  <button type="button" class="btn" id="select-all-btn">Select All</button>
+  <div class="right-actions">
+    <form id="bulk-depublish-form" method="post" action="{% url 'wildlife:depublish_photos_bulk' %}" style="margin:0;">
+      {% csrf_token %}
+      <button class="btn btn-danger" type="submit" id="bulk-depublish-btn" disabled
+              onclick="return confirm('Depublish selected photos? They will be moved back to staging.');">Depublish Selected</button>
+    </form>
+  </div>
+</div>
+{% endif %}
 
 <div style="margin: 10px 0 18px 0;">
   <button id="toggle-params-btn" class="btn" type="button">
@@ -357,6 +399,108 @@
   setTimeout(function() {
     map.invalidateSize();
   }, 100);
+  
+  // Bulk selection logic for researchers
+  {% if user.is_authenticated and user.is_researcher %}
+  (function() {
+    const selectedIds = new Set();
+    const LONG_PRESS_MS = 250;
+    const bulkDepublishBtn = document.getElementById('bulk-depublish-btn');
+    const bulkDepublishForm = document.getElementById('bulk-depublish-form');
+    const selectAllBtn = document.getElementById('select-all-btn');
+    
+    function syncSelectedInputs() {
+      if (!bulkDepublishForm) return;
+      // Remove existing hidden inputs
+      bulkDepublishForm.querySelectorAll('input[name="photo_ids"]').forEach(inp => inp.remove());
+      // Add current selection
+      selectedIds.forEach(id => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'photo_ids';
+        input.value = id;
+        bulkDepublishForm.appendChild(input);
+      });
+    }
+    
+    function updateBulkButtons() {
+      const anySelected = selectedIds.size > 0;
+      const count = selectedIds.size;
+      if (bulkDepublishBtn) {
+        bulkDepublishBtn.disabled = !anySelected;
+        bulkDepublishBtn.textContent = anySelected ? `Depublish Selected (${count})` : 'Depublish Selected';
+      }
+      if (selectAllBtn) {
+        selectAllBtn.textContent = anySelected ? 'Clear Selection' : 'Select All';
+      }
+      syncSelectedInputs();
+    }
+    
+    function toggleCardSelection(card) {
+      const photoId = card.dataset.photoId;
+      if (!photoId) return;
+      if (selectedIds.has(photoId)) {
+        selectedIds.delete(photoId);
+        card.classList.remove('is-selected');
+      } else {
+        selectedIds.add(photoId);
+        card.classList.add('is-selected');
+      }
+      updateBulkButtons();
+    }
+    
+    if (selectAllBtn) {
+      selectAllBtn.addEventListener('click', () => {
+        const cards = document.querySelectorAll('.photo-card.is-clickable');
+        if (selectedIds.size > 0) {
+          selectedIds.clear();
+          cards.forEach(c => c.classList.remove('is-selected'));
+        } else {
+          cards.forEach(c => {
+            const id = c.dataset.photoId;
+            if (id) {
+              selectedIds.add(id);
+              c.classList.add('is-selected');
+            }
+          });
+        }
+        updateBulkButtons();
+      });
+    }
+    
+    document.querySelectorAll('.photo-card.is-clickable').forEach(card => {
+      let pressTimer = null;
+      card.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('button, form, a, input, select, textarea')) return;
+        pressTimer = window.setTimeout(() => {
+          card.dataset.suppressClick = 'true';
+          toggleCardSelection(card);
+        }, LONG_PRESS_MS);
+      });
+      
+      const cancelPress = () => {
+        if (pressTimer) {
+          clearTimeout(pressTimer);
+          pressTimer = null;
+        }
+      };
+      
+      card.addEventListener('pointerup', cancelPress);
+      card.addEventListener('pointerleave', cancelPress);
+      card.addEventListener('pointercancel', cancelPress);
+      
+      card.addEventListener('click', (e) => {
+        if (card.dataset.suppressClick === 'true') {
+          e.preventDefault();
+          e.stopPropagation();
+          card.dataset.suppressClick = 'false';
+        }
+      });
+    });
+    
+    updateBulkButtons();
+  })();
+  {% endif %}
 </script>
 
 {% endblock %}

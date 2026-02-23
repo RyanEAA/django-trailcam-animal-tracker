@@ -24,6 +24,7 @@ urlpatterns = [
     path("photo/publish-bulk/", views.publish_photos_bulk, name="publish_photos_bulk"),
     # photo meta JSON endpoint removed; use page-based editor
     path("photo/<int:pk>/unpublish/", views.unpublish_photo, name="unpublish_photo"),
+    path("photo/depublish-bulk/", views.depublish_photos_bulk, name="depublish_photos_bulk"),
     
     # Detection management
     path("detection/<int:pk>/update-species/", views.update_detection_species, name="update_detection_species"),

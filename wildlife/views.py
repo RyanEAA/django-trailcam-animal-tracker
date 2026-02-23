@@ -1018,6 +1018,22 @@ def unpublish_photo(request, pk):
     return redirect("wildlife:gallery")
 
 
+def depublish_photos_bulk(request):
+    """Bulk depublish photos (move them back to staging)."""
+    require_researcher(request.user)
+    if request.method != "POST":
+        return HttpResponseBadRequest("POST required")
+
+    ids = request.POST.getlist("photo_ids")
+    if not ids:
+        return HttpResponseBadRequest("No photo IDs provided")
+
+    photos = Photo.objects.filter(pk__in=ids, is_published=True)
+    count = photos.count()
+    photos.update(is_published=False)
+    return redirect("wildlife:gallery")
+
+
 def photo_card_detail(request, pk):
     """Lightweight page showing the same info as a gallery card.
     Non-researchers can view this page; researchers see an Unpublish button when applicable.
