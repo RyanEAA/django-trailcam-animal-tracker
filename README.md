@@ -44,16 +44,16 @@ This workflow ensures **data quality, collaboration, and accountability**.
 
 When images are uploaded (or a researcher clicks **Analyze**), the system:
 
-1. Crops the bottom overlay of the trailcam image
-2. Applies OCR (Tesseract)
-3. Extracts:
+1. Uses the camera's **OCR mask** to extract specific regions from the image (temperature, pressure, camera ID, date, time)
+2. Applies OCR (Tesseract) with preprocessing (4x upscaling + binarization) to each region
+3. Extracts and parses:
    * Camera ID (e.g. `TRAILCAM05`)
    * Date
    * Time
    * Temperature (°C)
    * Pressure (inHg)
 4. Normalizes common OCR errors:
-   * 0, Q, D -> 0 in a camera number
+   * Camera ID last 2 chars: O→0, Q→0, S→5, I→1, etc.
 5. Automatically attaches/creates Camera (defaults to St. Edward's Univ. coords on create)
 6. Runs **SpeciesNet** on the image to detect animals/people/vehicles and stores detections with normalized bounding boxes (0..1)
 7. Saves parsed metadata and detections to the database
@@ -82,6 +82,14 @@ Each camera includes:
   * Edit camera metadata via a page-based form
     * Activate / deactivate cameras
     * Search cameras by name or description
+
+**OCR Mask Management**
+  * Each camera can be assigned a custom **OCR mask** defining 5 regions:
+    * Temperature, Pressure, Camera ID, Date, Time
+  * Researchers can create/edit OCR masks with an interactive canvas interface
+  * Test OCR functionality shows real-time extraction results with parsed values
+  * During upload, the camera's OCR mask is automatically used for metadata extraction
+  * Masks are reusable across multiple cameras with similar overlay formats
 
 **OCR Integration**
     * OCR-extracted camera IDs are normalized (e.g. TRAILCAMQ5 → TRAILCAM05)
@@ -271,12 +279,21 @@ subgraph Researcher
   RC3[Edit camera]
   RC4[Save camera]
   RC5[Activate or deactivate camera]
+  
+  RM1[Open OCR Masks page]
+  RM2[Create new OCR mask]
+  RM3[Draw regions on canvas]
+  RM4[Test OCR extraction]
+  RM5[Save OCR mask]
+  RM6[Assign mask to camera]
 end
 
 subgraph System
   S1[Receive uploads]
   S2[Store image in staging]
-  S3[Run OCR on image]
+  S3[Use camera OCR mask to extract regions]
+  S3B[Apply preprocessing 4x upscale + binarization]
+  S3C[Run OCR on each region]
   S3A[Normalize OCR camera id]
   S4{Camera exists?}
   S5[Attach camera to photo]
@@ -289,6 +306,10 @@ subgraph System
   SC1[Validate camera fields]
   SC2[Create camera record]
   SC3[Update camera record]
+  
+  SM1[Store OCR mask coordinates]
+  SM2[Run test OCR with preprocessing]
+  SM3[Return extracted + parsed values]
 end
 
 subgraph Public_User
@@ -297,7 +318,7 @@ subgraph Public_User
 end
 
 %% ========= PHOTO FLOW =========
-R1 --> R2 --> S1 --> S2 --> R3 --> R4 --> R5 --> S3 --> S3A --> S4
+R1 --> R2 --> S1 --> S2 --> R3 --> R4 --> R5 --> S3 --> S3B --> S3C --> S3A --> S4
 S4 -->|Yes| S5 --> S6 --> R6 --> S7 --> R7
 S4 -->|No| S6 --> R6
 
@@ -311,6 +332,12 @@ R1 --> RC1
 RC1 --> RC2 --> SC1 --> SC2 --> RC4
 RC1 --> RC3 --> SC1 --> SC3 --> RC4
 RC1 --> RC5 --> SC3
+
+%% ========= OCR MASK FLOW =========
+R1 --> RM1
+RM1 --> RM2 --> RM3 --> RM4 --> SM2 --> SM3 --> RM4
+RM4 --> RM5 --> SM1
+RC3 --> RM6 --> SC3
 ```
 
 ## 🧱 System Architecture Diagram
@@ -338,7 +365,8 @@ end
 
 %% --- UTILITIES / PIPELINE ---
 subgraph U[Utilities / Analysis Pipeline]
-  PIL[Pillow\nimage preprocessing]
+  PIL[Pillow\nimage preprocessing\n4x upscale + binarization]
+  MASK[OCR Mask\nregion extraction]
   OCR[Tesseract OCR\ntext extraction]
   RX[Regex Metadata Extractor\nparse timestamp / camera id / etc.]
 end
@@ -381,7 +409,9 @@ R -->|Click Analyze AJAX/fetch| JS
 JS -->|POST /analyze photo_id| V
 
 V -->|load image bytes| MEDIA
-V -->|run preprocessing| PIL
+V -->|get camera OCR mask| DB
+V -->|extract regions| MASK
+MASK -->|run preprocessing| PIL
 PIL --> OCR
 OCR --> RX
 
@@ -418,6 +448,9 @@ V -->|delete media file| MEDIA
 erDiagram
   USER ||--o{ PHOTO : uploads
   CAMERA ||--o{ PHOTO : captures
+  CAMERA ||--o| OCRMASK : uses
+  PHOTO ||--o{ PHOTODETECTION : contains
+  SPECIES ||--o{ PHOTODETECTION : classifies
 
   USER {
     int id PK
@@ -432,6 +465,32 @@ erDiagram
     decimal base_longitude
     string description
     boolean is_active
+    int ocr_mask_id FK
+  }
+
+  OCRMASK {
+    int id PK
+    string name
+    float temperature_x
+    float temperature_y
+    float temperature_w
+    float temperature_h
+    float pressure_x
+    float pressure_y
+    float pressure_w
+    float pressure_h
+    float camera_x
+    float camera_y
+    float camera_w
+    float camera_h
+    float date_x
+    float date_y
+    float date_w
+    float date_h
+    float time_x
+    float time_y
+    float time_w
+    float time_h
   }
 
   PHOTO {
@@ -445,6 +504,24 @@ erDiagram
     int camera_id FK
     int uploaded_by_id FK
   }
+
+  PHOTODETECTION {
+    int id PK
+    int photo_id FK
+    string category
+    float confidence
+    float x
+    float y
+    float w
+    float h
+    boolean is_shown
+    int species_id FK
+  }
+
+  SPECIES {
+    int id PK
+    string name
+  }
 ```
 
 ---
@@ -456,8 +533,9 @@ erDiagram
     ✅ Camera CRUD + OCR integration
     ✅ Animal detection & classification
     ✅ Map-based sightings view
-    📊 Excel information Extraction
-    🚀 Deployment & background processing
+    ✅ Excel information Extraction
+    ✅ Deployment & background processing
+    ✅ Custom OCR for individual cameras
 
 
 ## 🏙️ Images
