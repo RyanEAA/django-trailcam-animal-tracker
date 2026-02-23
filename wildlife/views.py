@@ -1210,6 +1210,14 @@ def photo_edit(request, pk):
         form = PhotoEditForm(request.POST, instance=photo)
         if form.is_valid():
             form.save()
+            
+            # Process detection visibility checkboxes
+            for det in photo.detections.all():
+                checkbox_name = f"det_is_shown_{det.id}"
+                # Checkboxes are only present in POST data if checked
+                det.is_shown = checkbox_name in request.POST
+                det.save()
+            
             # Reload the same edit page instead of sending to upload
             return redirect("wildlife:photo_edit", pk=pk)
     else:
