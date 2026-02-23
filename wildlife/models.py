@@ -16,6 +16,15 @@ class Camera(models.Model):
     # e.g. "TRAILCAM03" or "03" or "StEdwards-03"
     name = models.CharField(max_length=64, unique=True)
 
+    # Optional default OCR mask for this camera model
+    ocr_mask = models.ForeignKey(
+        "wildlife.OcrMask",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="cameras",
+    )
+
     # Base location for that camera
     base_latitude = models.DecimalField(max_digits=19, decimal_places=17)
     base_longitude = models.DecimalField(max_digits=19, decimal_places=17)

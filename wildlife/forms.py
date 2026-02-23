@@ -1,5 +1,5 @@
 from django import forms
-from .models import Photo, PhotoDetection, Camera
+from .models import Photo, PhotoDetection, Camera, OcrMask
 from django.core.exceptions import ValidationError
 import re
 
@@ -39,11 +39,16 @@ class PhotoDetectionForm(forms.ModelForm):
 class CameraForm(forms.ModelForm):
     class Meta:
         model = Camera
-        fields = ["name", "base_latitude", "base_longitude", "description", "is_active"]
+        fields = ["name", "base_latitude", "base_longitude", "description", "ocr_mask", "is_active"]
 
         widgets = {
             "description": forms.TextInput(attrs={"placeholder": "Optional notes (location, trail name, etc.)"}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["ocr_mask"].queryset = OcrMask.objects.order_by("name")
+        self.fields["ocr_mask"].required = False
 
     def clean_name(self):
         name = (self.cleaned_data.get("name") or "").strip().upper().replace(" ", "")

@@ -29,6 +29,20 @@
               </div>
             {% endfor %}
           {% endif %}
+
+          {% if mask_boxes %}
+            {% for m in mask_boxes %}
+              <div class="mask-box mask-box-{{ m.key }}"
+                   style="
+                     left: {{ m.x|floatformat:2 }}%;
+                     top: {{ m.y|floatformat:2 }}%;
+                     width: {{ m.w|floatformat:2 }}%;
+                     height: {{ m.h|floatformat:2 }}%;
+                   ">
+                <div class="mask-label">{{ m.label }}</div>
+              </div>
+            {% endfor %}
+          {% endif %}
         </div>
       {% endif %}
     </div>
@@ -160,7 +174,7 @@
             </button>
           </form>
 
-          {% if has_detections %}
+          {% if has_detections or mask_boxes %}
             <button class="btn" id="toggle-boxes-btn" type="button">Show bounding boxes</button>
           {% endif %}
         {% else %}
@@ -171,7 +185,7 @@
                       onclick="return confirm('Unpublish this photo and move it back to staging?');">Unpublish</button>
             </form>
           {% endif %}
-          {% if has_detections %}
+          {% if has_detections or mask_boxes %}
             <button class="btn" id="toggle-boxes-btn" type="button">Show bounding boxes</button>
           {% endif %}
         {% endif %}
@@ -180,7 +194,7 @@
     </div>
   </div>
 
-  {% if has_detections %}
+  {% if has_detections or mask_boxes %}
     <script>
       document.addEventListener('DOMContentLoaded', function () {
         const wrapper = document.getElementById('photo-wrapper');

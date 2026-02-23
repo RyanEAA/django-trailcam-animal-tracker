@@ -178,6 +178,7 @@
   </script>
 </form>
 
+{% if not is_edit %}
 <hr>
 
 <h2>Saved Masks</h2>
@@ -199,6 +200,7 @@
   </div>
 {% else %}
   <p>No OCR masks yet.</p>
+{% endif %}
 {% endif %}
 
 <script>
@@ -251,6 +253,7 @@
           w: coord.w * canvas.width,
           h: coord.h * canvas.height,
         };
+        updateHiddenInputs(region, regions[region]);
       }
     });
     updateCompletionStatus();

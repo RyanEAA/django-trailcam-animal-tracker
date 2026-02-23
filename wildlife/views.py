@@ -53,12 +53,17 @@ def _crop_norm(img: Image.Image, x: float, y: float, w: float, h: float) -> Imag
 
 
 def _ocr_text_from_region(region: Image.Image) -> str:
-    gray = region.convert("L")
-    scale = 3
-    gray = gray.resize((gray.width * scale, gray.height * scale))
-    gray = gray.point(lambda p: 255 if p > 140 else 0)
-    config = "--oem 1 --psm 7"
-    return pytesseract.image_to_string(gray, config=config)
+    img = region
+    if img.mode == "RGBA":
+        img = img.convert("RGB")
+    img = img.convert("L")
+
+    scale = 4
+    img = img.resize((img.width * scale, img.height * scale), Image.Resampling.LANCZOS)
+    img = img.point(lambda p: 255 if p > 128 else 0, "1")
+    img = img.convert("L")
+
+    return pytesseract.image_to_string(img)
 
 
 def _extract_overlay_meta(img: Image.Image, mask: OcrMask | None):
@@ -383,15 +388,19 @@ def upload_photos(request):
         return HttpResponseForbidden("Only researchers can upload photos.")
 
     error = None
-    selected_mask = None
+    selected_camera = None
+    camera_id = ""
     if request.method == "POST":
-        mask_id = (request.POST.get("ocr_mask") or "").strip()
-        if mask_id:
-            selected_mask = OcrMask.objects.filter(id=mask_id).first()
+        camera_id = (request.POST.get("camera") or "").strip()
+        if camera_id:
+            selected_camera = Camera.objects.filter(id=camera_id).first()
+        if not selected_camera:
+            error = "Please select a camera."
         files = request.FILES.getlist("images")
         if not files:
             error = "No files received. Please choose images before uploading."
-        else:
+
+        if not error:
             # Ensure speciesnet_inbox directory exists
             inbox_path = Path(settings.SPECIESNET_INBOX_ROOT)
             inbox_path.mkdir(parents=True, exist_ok=True)
@@ -419,9 +428,11 @@ def upload_photos(request):
                     
                     # 2. Run OCR to extract metadata
                     ocr_data = None
+                    img = None
                     try:
                         img = Image.open(inbox_file_path)
-                        ocr_data = _extract_overlay_meta(img, selected_mask)
+                        mask_to_use = selected_camera.ocr_mask if selected_camera else None
+                        ocr_data = _extract_overlay_meta(img, mask_to_use)
                     except Exception as e:
                         print(f"OCR warning for {uploaded_file.name}: {e}")
                     
@@ -448,24 +459,16 @@ def upload_photos(request):
                         is_published=False
                     )
 
-                    if selected_mask:
-                        photo.ocr_mask = selected_mask
+                    if selected_camera:
+                        photo.camera = selected_camera
+                        photo.latitude = selected_camera.base_latitude
+                        photo.longitude = selected_camera.base_longitude
+                        if selected_camera.ocr_mask:
+                            photo.ocr_mask = selected_camera.ocr_mask
                     
                     # Apply OCR metadata if available
                     if ocr_data:
-                        if ocr_data.camera_name:
-                            cam = Camera.objects.filter(name=ocr_data.camera_name).first()
-                            if not cam:
-                                # Create new camera with default St. Edwards University coordinates
-                                cam = Camera.objects.create(
-                                    name=ocr_data.camera_name,
-                                    base_latitude=30.2311,
-                                    base_longitude=-97.7524,
-                                    description="needs proper lat and long"
-                                )
-                            photo.camera = cam
-                            photo.latitude = cam.base_latitude
-                            photo.longitude = cam.base_longitude
+                        # Camera is selected explicitly; do not override from OCR camera name
                         
                         if ocr_data.date_taken:
                             photo.date_taken = ocr_data.date_taken
@@ -501,13 +504,12 @@ def upload_photos(request):
                 return redirect("wildlife:upload_photos")
 
     recent_photos = Photo.objects.filter(is_published=False).order_by("-uploaded_at")[:50]
-    ocr_masks = OcrMask.objects.order_by("name")
 
     return render(request, "wildlife/upload.html", {
         "error": error,
         "recent_photos": recent_photos,
-        "ocr_masks": ocr_masks,
-        "selected_mask_id": selected_mask.id if selected_mask else "",
+        "cameras": Camera.objects.filter(is_active=True).order_by("name"),
+        "selected_camera_id": int(camera_id) if (camera_id and camera_id.isdigit()) else "",
         "camera_names": list(
             Camera.objects.filter(is_active=True)
             .order_by("name")
@@ -789,13 +791,15 @@ def analyze_photo(request, pk):
     # 1) Run OCR pipeline
     try:
         img = Image.open(photo.image.path)
-        data = _extract_overlay_meta(img, photo.ocr_mask)
+        # Prefer the camera's mask if a camera is assigned
+        mask = photo.camera.ocr_mask if photo.camera and photo.camera.ocr_mask else photo.ocr_mask
+        data = _extract_overlay_meta(img, mask)
     except Exception as e:
         print("OCR ERROR:", e)
         return HttpResponseForbidden("OCR failed. Is Tesseract installed?")
 
     # set camera if exists, create if not
-    if data.camera_name:
+    if photo.camera is None and data.camera_name:
         cam = Camera.objects.filter(name=data.camera_name).first()
         if not cam:
             # Create new camera with default St. Edwards University coordinates
@@ -806,11 +810,13 @@ def analyze_photo(request, pk):
                 description="needs proper lat and long"
             )
         photo.camera = cam
-        # Also update lat/long from camera if not set
+
+    # Also update lat/long from camera if not set
+    if photo.camera:
         if photo.latitude is None:
-            photo.latitude = cam.base_latitude
+            photo.latitude = photo.camera.base_latitude
         if photo.longitude is None:
-            photo.longitude = cam.base_longitude
+            photo.longitude = photo.camera.base_longitude
 
     if data.date_taken:
         photo.date_taken = data.date_taken
@@ -898,6 +904,59 @@ def delete_photo_staging(request, pk):
         os.remove(photo.image.path)
 
     photo.delete()
+    return redirect("wildlife:upload_photos")
+
+
+@login_required
+@require_POST
+def delete_photos_staging_bulk(request):
+    require_researcher(request.user)
+    ids = request.POST.getlist("photo_ids")
+    if not ids:
+        return redirect("wildlife:upload_photos")
+
+    photos = Photo.objects.filter(pk__in=ids, is_published=False)
+    for photo in photos:
+        if photo.image and os.path.isfile(photo.image.path):
+            os.remove(photo.image.path)
+        photo.delete()
+
+    return redirect("wildlife:upload_photos")
+
+
+@login_required
+@require_POST
+def publish_photos_bulk(request):
+    require_researcher(request.user)
+    ids = request.POST.getlist("photo_ids")
+    if not ids:
+        return redirect("wildlife:upload_photos")
+
+    photos = Photo.objects.filter(pk__in=ids, is_published=False)
+    for photo in photos:
+        if photo.date_taken is None or photo.time_taken is None or photo.temperature is None or photo.pressure is None:
+            continue
+
+        if photo.image:
+            person_detections = photo.detections.filter(category="2", is_shown=True)
+            if person_detections.exists():
+                img_path = photo.image.path
+                img = Image.open(img_path)
+                draw = ImageDraw.Draw(img)
+
+                width, height = img.size
+                for det in person_detections:
+                    if det.x is not None and det.y is not None and det.w is not None and det.h is not None:
+                        x1 = int(float(det.x) * width)
+                        y1 = int(float(det.y) * height)
+                        x2 = int((float(det.x) + float(det.w)) * width)
+                        y2 = int((float(det.y) + float(det.h)) * height)
+                        draw.rectangle([x1, y1, x2, y2], fill='black')
+                img.save(img_path)
+
+        photo.is_published = True
+        photo.save()
+
     return redirect("wildlife:upload_photos")
 
 
@@ -1192,6 +1251,18 @@ def photo_edit(request, pk):
                 "is_shown": det.is_shown,
             })
 
+    # ---- OCR mask boxes (percent coords) ----
+    mask_boxes = []
+    mask = photo.camera.ocr_mask if photo.camera and photo.camera.ocr_mask else photo.ocr_mask
+    if photo.image and mask:
+        mask_boxes = [
+            {"key": "temperature", "label": "temperature", "x": float(mask.temperature_x) * 100, "y": float(mask.temperature_y) * 100, "w": float(mask.temperature_w) * 100, "h": float(mask.temperature_h) * 100},
+            {"key": "pressure", "label": "pressure", "x": float(mask.pressure_x) * 100, "y": float(mask.pressure_y) * 100, "w": float(mask.pressure_w) * 100, "h": float(mask.pressure_h) * 100},
+            {"key": "camera", "label": "camera", "x": float(mask.camera_x) * 100, "y": float(mask.camera_y) * 100, "w": float(mask.camera_w) * 100, "h": float(mask.camera_h) * 100},
+            {"key": "date", "label": "date", "x": float(mask.date_x) * 100, "y": float(mask.date_y) * 100, "w": float(mask.date_w) * 100, "h": float(mask.date_h) * 100},
+            {"key": "time", "label": "time", "x": float(mask.time_x) * 100, "y": float(mask.time_y) * 100, "w": float(mask.time_w) * 100, "h": float(mask.time_h) * 100},
+        ]
+
     context = {
         "form": form,
         "photo": photo,
@@ -1201,6 +1272,7 @@ def photo_edit(request, pk):
         "has_detections": detections.exists(),
         "detection_species_names": sorted(set(detection_species_names)),
         "detection_boxes": detection_boxes,
+        "mask_boxes": mask_boxes,
     }
 
     return render(request, "wildlife/photo_form.html", context)

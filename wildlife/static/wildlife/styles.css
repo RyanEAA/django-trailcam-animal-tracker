@@ -427,3 +427,34 @@ body{
 .photo-wrapper.show-boxes .det-box {
   display: block;
 }
+
+/* OCR mask overlay boxes */
+.mask-box {
+  position: absolute;
+  border: 2px dashed #2c6bed;
+  box-sizing: border-box;
+  display: none;
+  pointer-events: none;
+}
+
+.photo-wrapper.show-boxes .mask-box {
+  display: block;
+}
+
+.mask-label {
+  position: absolute;
+  top: -1.2em;
+  left: 0;
+  background: rgba(44, 107, 237, 0.85);
+  color: #fff;
+  font-size: 11px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.mask-box-temperature { border-color: #ff6b6b; }
+.mask-box-pressure { border-color: #ffa94d; }
+.mask-box-camera { border-color: #4dabf7; }
+.mask-box-date { border-color: #51cf66; }
+.mask-box-time { border-color: #b197fc; }

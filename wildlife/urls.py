@@ -20,6 +20,8 @@ urlpatterns = [
     path("photo/<int:pk>/analyze/", views.analyze_photo, name="analyze_photo"),
     path("photo/<int:pk>/publish/", views.publish_photo, name="publish_photo"),
     path("photo/<int:pk>/delete-staging/", views.delete_photo_staging, name="delete_photo_staging"),
+    path("photo/delete-staging-bulk/", views.delete_photos_staging_bulk, name="delete_photos_staging_bulk"),
+    path("photo/publish-bulk/", views.publish_photos_bulk, name="publish_photos_bulk"),
     # photo meta JSON endpoint removed; use page-based editor
     path("photo/<int:pk>/unpublish/", views.unpublish_photo, name="unpublish_photo"),
     
