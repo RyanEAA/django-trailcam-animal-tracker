@@ -31,7 +31,11 @@ import pytesseract
 from .models import Photo, PhotoDetection, Species, Camera, OcrMask
 from .forms import PhotoEditForm, CameraForm
 from .utils.utils import require_researcher
-from wildlife.utils.ocr import crop_bottom_strip, extract_overlay_meta_split
+from wildlife.utils.ocr import (
+    crop_bottom_strip,
+    extract_overlay_meta_split,
+    extract_overlay_meta_regions,
+)
 
 
 def _clamp(v: float, min_v: float = 0.0, max_v: float = 1.0) -> float:
@@ -81,11 +85,13 @@ def _extract_overlay_meta(img: Image.Image, mask: OcrMask | None):
         t_date = _ocr_text_from_region(date)
         t_time = _ocr_text_from_region(time)
 
-        # Combine temperature + pressure into left region, date + time into right region for compatibility
-        t_left = f"{t_temperature} {t_pressure}"
-        t_center = t_camera
-        t_right = f"{t_date} {t_time}"
-        return extract_overlay_meta_split(t_left, t_center, t_right)
+        return extract_overlay_meta_regions(
+            temperature_text=t_temperature,
+            pressure_text=t_pressure,
+            camera_text=t_camera,
+            date_text=t_date,
+            time_text=t_time,
+        )
 
     # Default behavior (bottom strip split)
     strip = crop_bottom_strip(img, pct=0.042).convert("L")

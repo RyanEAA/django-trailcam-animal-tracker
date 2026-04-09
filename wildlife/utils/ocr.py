@@ -121,13 +121,22 @@ def _extract_temp_pressure(left_text: str) -> tuple[Optional[float], Optional[fl
         except ValueError:
             pass
 
-    # strict 2 digits dot 2 digits (avoids grabbing '9' out of 29.09)
+    # Accept pressure with explicit INHG, e.g. "29.09 INHG"
     m = re.search(r"\b(\d{2}\.\d{2})\s*INHG\b", t)
     if m:
         try:
             press = float(m.group(1))
         except ValueError:
             pass
+
+    # Also accept bare decimal values when OCR region is pressure-only, e.g. "29.09"
+    if press is None:
+        m = re.search(r"\b(\d{2}\.\d{2})\b", t)
+        if m:
+            try:
+                press = float(m.group(1))
+            except ValueError:
+                pass
 
     return temp, press
 
@@ -149,19 +158,68 @@ def _extract_date_time(right_text: str) -> tuple[Optional[date], Optional[time]]
     d = None
     tm = None
 
-    m = re.search(r"\b(\d{2}/\d{2}/\d{4})\b", t)
-    if m:
-        try:
-            d = datetime.strptime(m.group(1), "%m/%d/%Y").date()
-        except ValueError:
-            pass
+    # Date formats seen in OCR output
+    date_candidates = [
+        (r"\b(\d{2}/\d{2}/\d{4})\b", "%m/%d/%Y"),
+        (r"\b(\d{4}/\d{2}/\d{2})\b", "%Y/%m/%d"),
+        (r"\b(\d{4}-\d{2}-\d{2})\b", "%Y-%m-%d"),
+    ]
+    for pattern, fmt in date_candidates:
+        m = re.search(pattern, t)
+        if m:
+            try:
+                d = datetime.strptime(m.group(1), fmt).date()
+                break
+            except ValueError:
+                pass
 
+    # Times like 05:41PM
     m = re.search(r"\b(\d{1,2}:\d{2})\s*([AP]M)\b", t)
     if m:
         try:
             tm = datetime.strptime(m.group(1) + m.group(2), "%I:%M%p").time()
         except ValueError:
             pass
+
+    # Times like 17:41 or 17:41:09
+    if tm is None:
+        m = re.search(r"\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b", t)
+        if m:
+            try:
+                hour = int(m.group(1))
+                minute = int(m.group(2))
+                second = int(m.group(3)) if m.group(3) else 0
+                if 0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= second <= 59:
+                    tm = time(hour=hour, minute=minute, second=second)
+            except ValueError:
+                pass
+
+    # Compact times like 0541A / 0541P / 1741
+    if tm is None:
+        m = re.search(r"\b(\d{2})(\d{2})\s*([AP])\b", t)
+        if m:
+            try:
+                hour = int(m.group(1))
+                minute = int(m.group(2))
+                meridiem = m.group(3)
+                if 1 <= hour <= 12 and 0 <= minute <= 59:
+                    if meridiem == "P" and hour != 12:
+                        hour += 12
+                    elif meridiem == "A" and hour == 12:
+                        hour = 0
+                    tm = time(hour=hour, minute=minute)
+            except ValueError:
+                pass
+    if tm is None:
+        m = re.search(r"\b(\d{2})(\d{2})\b", t)
+        if m:
+            try:
+                hour = int(m.group(1))
+                minute = int(m.group(2))
+                if 0 <= hour <= 23 and 0 <= minute <= 59:
+                    tm = time(hour=hour, minute=minute)
+            except ValueError:
+                pass
 
     return d, tm
 
@@ -187,6 +245,44 @@ def extract_overlay_meta_split(left_text: str, center_text: str, right_text: str
         normalize_overlay_text(left_text),
         normalize_overlay_text(center_text),
         normalize_overlay_text(right_text),
+    ])
+
+    return meta
+
+
+def extract_overlay_meta_regions(
+    temperature_text: str,
+    pressure_text: str,
+    camera_text: str,
+    date_text: str,
+    time_text: str,
+) -> OverlayMeta:
+    """
+    Extract metadata from individually OCR'd regions from an OCR mask.
+    """
+    meta = OverlayMeta()
+
+    temp_from_temp, _ = _extract_temp_pressure(temperature_text)
+    _, press_from_press = _extract_temp_pressure(pressure_text)
+    temp_from_both, press_from_both = _extract_temp_pressure(f"{temperature_text} {pressure_text}")
+
+    meta.temperature_c = temp_from_temp if temp_from_temp is not None else temp_from_both
+    meta.pressure_inhg = press_from_press if press_from_press is not None else press_from_both
+
+    meta.camera_name = _extract_camera(camera_text)
+
+    d1, _ = _extract_date_time(date_text)
+    _, t1 = _extract_date_time(time_text)
+    d2, t2 = _extract_date_time(f"{date_text} {time_text}")
+    meta.date_taken = d1 if d1 else d2
+    meta.time_taken = t1 if t1 else t2
+
+    meta.raw_text = " | ".join([
+        normalize_overlay_text(temperature_text),
+        normalize_overlay_text(pressure_text),
+        normalize_overlay_text(camera_text),
+        normalize_overlay_text(date_text),
+        normalize_overlay_text(time_text),
     ])
 
     return meta
