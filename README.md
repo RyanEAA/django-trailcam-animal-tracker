@@ -547,7 +547,7 @@ erDiagram
     ﹖ Allow for Regex mapping to ocr detections
 
 
-## 🏙️ Images
+## Images
 
 <img width="1878" height="831" alt="Screenshot 2025-12-29 at 8 30 27 PM" src="https://github.com/user-attachments/assets/c076ccf5-f7c1-41c8-afea-3ecfb2bb497f" />
 Public gallery view, where you can filter images, and view locaiton of images on map.
