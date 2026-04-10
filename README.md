@@ -1,4 +1,4 @@
-# 🦌 Trailcam Wildlife Research Platform
+# Trailcam Wildlife Research Platform
 
 A collaborative Django-based platform for **uploading, analyzing, staging, and publishing trail camera images** for wildlife research.
 
@@ -6,9 +6,9 @@ This project is designed to support **teams of researchers** working together to
 
 ---
 
-## ✨ Key Features
+## Key Features
 
-### 🔐 Role-Based Access
+### Role-Based Access
 
 * **Public users**
 
@@ -25,7 +25,7 @@ This project is designed to support **teams of researchers** working together to
 
 ---
 
-### 🧪 Staging → Publishing Workflow
+### Staging → Publishing Workflow
 
 * All uploaded photos enter a **shared staging area** (`/upload`)
 * Any researcher can:
@@ -40,7 +40,7 @@ This workflow ensures **data quality, collaboration, and accountability**.
 
 ---
 
-### 🧠 OCR + AI (SpeciesNet) Analysis
+### OCR + AI (SpeciesNet) Analysis
 
 When images are uploaded (or a researcher clicks **Analyze**), the system:
 
@@ -64,7 +64,7 @@ Researchers can then **review and edit** extracted values before publishing.
 
 ---
 
-### 📷 Camera Management (CRUD)
+### Camera Management (CRUD)
 
 Researchers can manage cameras via the Cameras page.
 
@@ -99,7 +99,7 @@ Each camera includes:
 
 ---
 
-### 📝 Page-based Metadata Editing
+### Page-based Metadata Editing
 
 * Clicking Edit opens a **page-based editor**
 * Metadata fields use appropriate controls:
@@ -113,7 +113,7 @@ Each camera includes:
 
 ---
 
-### 🖼️ Gallery Experience
+### Gallery Experience
 
 * Clean, card-based UI
 * Optional toggle to hide/show metadata
@@ -123,7 +123,7 @@ Each camera includes:
 
 ---
 
-## 🧱 Tech Stack
+## Tech Stack
 
 | Layer            | Technology                     |
 | ---------------- | ------------------------------ |
@@ -167,9 +167,9 @@ django-trailcam-animal-tracker/
 
 ---
 
-## 🔁 Core Workflows
+## Core Workflows
 
-### 1️⃣ Upload & Staging
+### Upload & Staging
 
 1. Researcher uploads images (single files or entire folders)
 2. Client shows a **progress bar** updating as each image is processed server-side
@@ -178,7 +178,7 @@ django-trailcam-animal-tracker/
 
 ---
 
-### 2️⃣ Analysis
+### Analysis
 
 1. Researcher can click **Analyze** to re-run OCR + SpeciesNet on a single staging photo
 2. OCR extracts metadata; SpeciesNet produces detections and bounding boxes
@@ -187,7 +187,7 @@ django-trailcam-animal-tracker/
 
 ---
 
-### 3️⃣ Publishing
+### Publishing
 
 1. Image must have valid metadata
 2. Researcher clicks **Publish** (saves current edits automatically)
@@ -196,7 +196,7 @@ django-trailcam-animal-tracker/
 
 ---
 
-### 4️⃣ Unpublishing
+### Unpublishing
 
 1. Researcher clicks **Unpublish** in gallery
 2. Image returns to staging
@@ -204,7 +204,7 @@ django-trailcam-animal-tracker/
 
 ---
 
-## 🛡️ Data Integrity & Validation
+## Data Integrity & Validation
 
 * Metadata inputs enforce:
 
@@ -215,7 +215,7 @@ django-trailcam-animal-tracker/
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Install dependencies
 
@@ -242,20 +242,27 @@ python manage.py migrate
 python manage.py runserver
 ```
 
-Optional: ensure `speciesnet.json` exists at the project root (or configured path) if required by `services/speciesnet.py`.
+### Create Superuser
+```bash
+python manage.py createsuperuser
+```
 
+### Create Researcher
+1. Go to admin page and sign in as super user
+- url/admin
+- Got to users
+- create user and click 'is researcher'
 ---
 
-## 📜 License
+## License
 
 This project is intended for **academic and research use**.
-License can be added as needed.
 
 ---
 
 
 
-## 🔁 User Flow Diagrams
+## User Flow Diagrams
 
 ```mermaid
 flowchart TD
@@ -340,7 +347,7 @@ RM4 --> RM5 --> SM1
 RC3 --> RM6 --> SC3
 ```
 
-## 🧱 System Architecture Diagram
+## System Architecture Diagram
 
 ``` mermaid
 flowchart LR
@@ -442,7 +449,7 @@ V -->|delete media file| MEDIA
 
 ```
 
-## 🗃️ Data Model Diagram 
+## Data Model Diagram 
 
 ```mermaid
 erDiagram
@@ -526,7 +533,7 @@ erDiagram
 
 ---
 
-## 🧭 Roadmap (High-Level)
+## Roadmap (High-Level)
 
     ✅ Shared staging workflow
     ✅ Modal-based metadata editing
@@ -536,6 +543,8 @@ erDiagram
     ✅ Excel information Extraction
     ✅ Deployment & background processing
     ✅ Custom OCR for individual cameras
+    ﹖ Switch to Easy OCR
+    ﹖ Allow for Regex mapping to ocr detections
 
 
 ## 🏙️ Images
