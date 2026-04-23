@@ -1,4 +1,4 @@
-# 🦌 Trailcam Wildlife Research Platform
+# Trailcam Wildlife Research Platform
 
 A collaborative Django-based platform for **uploading, analyzing, staging, and publishing trail camera images** for wildlife research.
 
@@ -6,9 +6,9 @@ This project is designed to support **teams of researchers** working together to
 
 ---
 
-## ✨ Key Features
+## Key Features
 
-### 🔐 Role-Based Access
+### Role-Based Access
 
 * **Public users**
 
@@ -25,7 +25,7 @@ This project is designed to support **teams of researchers** working together to
 
 ---
 
-### 🧪 Staging → Publishing Workflow
+### Staging → Publishing Workflow
 
 * All uploaded photos enter a **shared staging area** (`/upload`)
 * Any researcher can:
@@ -40,7 +40,7 @@ This workflow ensures **data quality, collaboration, and accountability**.
 
 ---
 
-### 🧠 OCR + AI (SpeciesNet) Analysis
+### OCR + AI (SpeciesNet) Analysis
 
 When images are uploaded (or a researcher clicks **Analyze**), the system:
 
@@ -64,7 +64,7 @@ Researchers can then **review and edit** extracted values before publishing.
 
 ---
 
-### 📷 Camera Management (CRUD)
+### Camera Management (CRUD)
 
 Researchers can manage cameras via the Cameras page.
 
@@ -91,7 +91,7 @@ Each camera includes:
 
 ---
 
-### 📝 Page-based Metadata Editing
+### Page-based Metadata Editing
 
 * Clicking Edit opens a **page-based editor**
 * Metadata fields use appropriate controls:
@@ -105,7 +105,7 @@ Each camera includes:
 
 ---
 
-### 🖼️ Gallery Experience
+### Gallery Experience
 
 * Clean, card-based UI
 * Optional toggle to hide/show metadata
@@ -115,7 +115,7 @@ Each camera includes:
 
 ---
 
-## 🧱 Tech Stack
+## Tech Stack
 
 | Layer            | Technology                     |
 | ---------------- | ------------------------------ |
@@ -130,7 +130,7 @@ Each camera includes:
 
 ---
 
-## 📂 Project Structure (Relevant Parts)
+## Project Structure (Relevant Parts)
 
 ```text
 django-trailcam-animal-tracker/
@@ -159,9 +159,9 @@ django-trailcam-animal-tracker/
 
 ---
 
-## 🔁 Core Workflows
+## Core Workflows
 
-### 1️⃣ Upload & Staging
+### Upload & Staging
 
 1. Researcher uploads images (single files or entire folders)
 2. Client shows a **progress bar** updating as each image is processed server-side
@@ -170,7 +170,7 @@ django-trailcam-animal-tracker/
 
 ---
 
-### 2️⃣ Analysis
+### Analysis
 
 1. Researcher can click **Analyze** to re-run OCR + SpeciesNet on a single staging photo
 2. OCR extracts metadata; SpeciesNet produces detections and bounding boxes
@@ -179,7 +179,7 @@ django-trailcam-animal-tracker/
 
 ---
 
-### 3️⃣ Publishing
+### Publishing
 
 1. Image must have valid metadata
 2. Researcher clicks **Publish** (saves current edits automatically)
@@ -188,7 +188,7 @@ django-trailcam-animal-tracker/
 
 ---
 
-### 4️⃣ Unpublishing
+### Unpublishing
 
 1. Researcher clicks **Unpublish** in gallery
 2. Image returns to staging
@@ -196,7 +196,7 @@ django-trailcam-animal-tracker/
 
 ---
 
-## 🛡️ Data Integrity & Validation
+## Data Integrity & Validation
 
 * Metadata inputs enforce:
 
@@ -207,7 +207,7 @@ django-trailcam-animal-tracker/
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Install dependencies
 
@@ -238,7 +238,7 @@ Optional: ensure `speciesnet.json` exists at the project root (or configured pat
 
 ---
 
-## 📜 License
+## License
 
 This project is intended for **academic and research use**.
 License can be added as needed.
@@ -247,7 +247,7 @@ License can be added as needed.
 
 
 
-## 🔁 User Flow Diagrams
+## User Flow Diagrams
 
 ```mermaid
 flowchart TD
@@ -313,7 +313,7 @@ RC1 --> RC3 --> SC1 --> SC3 --> RC4
 RC1 --> RC5 --> SC3
 ```
 
-## 🧱 System Architecture Diagram
+## System Architecture Diagram
 
 ``` mermaid
 flowchart LR
@@ -412,7 +412,7 @@ V -->|delete media file| MEDIA
 
 ```
 
-## 🗃️ Data Model Diagram 
+## Data Model Diagram 
 
 ```mermaid
 erDiagram
@@ -449,7 +449,7 @@ erDiagram
 
 ---
 
-## 🧭 Roadmap (High-Level)
+## Roadmap (High-Level)
 
     ✅ Shared staging workflow
     ✅ Modal-based metadata editing
@@ -460,7 +460,7 @@ erDiagram
     🚀 Deployment & background processing
 
 
-## 🏙️ Images
+## Images
 
 <img width="1878" height="831" alt="Screenshot 2025-12-29 at 8 30 27 PM" src="https://github.com/user-attachments/assets/c076ccf5-f7c1-41c8-afea-3ecfb2bb497f" />
 Public gallery view, where you can filter images, and view locaiton of images on map.
