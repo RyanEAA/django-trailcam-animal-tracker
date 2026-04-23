@@ -11,3 +11,5 @@
 
 # ignore database files
 *.sqlite3
+
+__pycache__/

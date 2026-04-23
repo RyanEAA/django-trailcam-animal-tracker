@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.contrib.auth.decorators import login_required
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Q
 from django.http import (
     HttpResponse,
@@ -307,6 +307,57 @@ def photo_detail(request, pk):
     return render(request, "wildlife/photo_form.html", context)
 
 
+def _coerce_decimal(value, *, decimal_places: int):
+    """
+    Coerce OCR numeric values safely into Decimal with fixed precision.
+    Returns None when parsing fails.
+    """
+    if value is None:
+        return None
+
+    try:
+        dec = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+
+    if not dec.is_finite():
+        return None
+
+    quant = Decimal("1").scaleb(-decimal_places)
+    try:
+        return dec.quantize(quant)
+    except InvalidOperation:
+        return None
+
+
+def _repair_invalid_photo_decimals():
+    """
+    Repair legacy invalid decimal values in SQLite for upload-page rendering.
+    Any unparsable/NaN values are set to NULL, and valid values are quantized.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT id, temperature, pressure FROM wildlife_photo")
+        rows = cursor.fetchall()
+
+    updates = []
+    for photo_id, temp_raw, pressure_raw in rows:
+        temp_clean = _coerce_decimal(temp_raw, decimal_places=2)
+        pressure_clean = _coerce_decimal(pressure_raw, decimal_places=2)
+
+        updates.append((
+            str(temp_clean) if temp_clean is not None else None,
+            str(pressure_clean) if pressure_clean is not None else None,
+            photo_id,
+        ))
+
+    if updates:
+        with connection.cursor() as cursor:
+            cursor.executemany(
+                "UPDATE wildlife_photo SET temperature = ?, pressure = ? WHERE id = ?",
+                updates,
+            )
+
+
 # ============================================================
 # Researcher pages
 # ============================================================
@@ -417,10 +468,13 @@ def upload_photos(request):
                             photo.date_taken = ocr_data.date_taken
                         if ocr_data.time_taken:
                             photo.time_taken = ocr_data.time_taken
-                        if ocr_data.temperature_c is not None:
-                            photo.temperature = ocr_data.temperature_c
-                        if ocr_data.pressure_inhg is not None:
-                            photo.pressure = ocr_data.pressure_inhg
+                        temp = _coerce_decimal(ocr_data.temperature_c, decimal_places=2)
+                        if temp is not None:
+                            photo.temperature = temp
+
+                        pressure = _coerce_decimal(ocr_data.pressure_inhg, decimal_places=2)
+                        if pressure is not None:
+                            photo.pressure = pressure
                     
                     photo.save()
                     
@@ -446,7 +500,11 @@ def upload_photos(request):
             if not error:
                 return redirect("wildlife:upload_photos")
 
-    recent_photos = Photo.objects.filter(is_published=False).order_by("-uploaded_at")[:50]
+    try:
+        recent_photos = list(Photo.objects.filter(is_published=False).order_by("-uploaded_at")[:50])
+    except InvalidOperation:
+        _repair_invalid_photo_decimals()
+        recent_photos = list(Photo.objects.filter(is_published=False).order_by("-uploaded_at")[:50])
 
     return render(request, "wildlife/upload.html", {
         "error": error,
@@ -520,10 +578,13 @@ def analyze_photo(request, pk):
         photo.date_taken = data.date_taken
     if data.time_taken:
         photo.time_taken = data.time_taken
-    if data.temperature_c is not None:
-        photo.temperature = data.temperature_c
-    if data.pressure_inhg is not None:
-        photo.pressure = data.pressure_inhg
+    temp = _coerce_decimal(data.temperature_c, decimal_places=2)
+    if temp is not None:
+        photo.temperature = temp
+
+    pressure = _coerce_decimal(data.pressure_inhg, decimal_places=2)
+    if pressure is not None:
+        photo.pressure = pressure
 
     photo.save()
 
