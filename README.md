@@ -216,10 +216,17 @@ Use a virtual environment and install from `requirements.txt`:
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # macOS/Linux
-# .venv\Scripts\activate  # Windows PowerShell
+#.venv\Scripts\activate  # Windows PowerShell
 
-pip install -r requirements.txt
+pip install Django pillow pytesseract
 ```
+
+### Install speciest (macOS)
+
+```bash
+pip install speciesnet --use-pep517
+```
+
 
 ### Install Tesseract (macOS)
 
@@ -232,6 +239,12 @@ brew install tesseract
 ```bash
 python manage.py migrate
 python manage.py runserver
+```
+
+### Create Superuser
+
+```bash
+python manage.py createsuperuser
 ```
 
 Optional: ensure `speciesnet.json` exists at the project root (or configured path) if required by `services/speciesnet.py`.
